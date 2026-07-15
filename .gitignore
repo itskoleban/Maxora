@@ -1,0 +1,63 @@
+# ==========================
+# Editor / Formatting
+# ==========================
+.prettierignore
+.clang-format
+
+# ==========================
+# Documentation / Notes
+# ==========================
+README.dev.md
+
+# ==========================
+# Build directories
+# ==========================
+build/
+build32/
+cmake-build-*/
+out/
+
+# ==========================
+# Logs / Temporary files
+# ==========================
+*.log
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# ==========================
+# C/C++ Build artifacts
+# ==========================
+*.obj
+*.o
+*.a
+*.lib
+*.pdb
+*.ilk
+*.exp
+
+# ==========================
+# Compiled binaries
+# ==========================
+*.exe
+*.dll
+*.so
+*.dylib
+
+# ==========================
+# IDEs and Editors
+# ==========================
+.vscode/
+.vs/
+.idea/
+*.suo
+*.user
+*.sln
+compile_commands.json
+
+# ==========================
+# OS Generated Files
+# ==========================
+.DS_Store
+Thumbs.db
