@@ -1,0 +1,12 @@
+[submodule "lib/sdk"]
+	path = lib/sdk
+	url = https://github.com/openmultiplayer/open.mp-sdk.git
+[submodule "lib/compiler"]
+	path = lib/compiler
+	url = https://github.com/openmultiplayer/compiler.git
+[submodule "lib/pawn-natives"]
+	path = lib/pawn-natives
+	url = https://github.com/openmultiplayer/pawn-natives.git
+[submodule "lib/libmaxminddb"]
+	path = lib/libmaxminddb
+	url = https://github.com/maxmind/libmaxminddb.git
