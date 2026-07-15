@@ -1,6 +1,6 @@
 # Maxora
 
-Maxora is a fast, thread-safe, and robust [open.mp](https://open.mp/) component for querying MaxMind DB (`.mmdb`) databases directly from Pawn scripts.
+Maxora is a fast and robust [open.mp](https://open.mp/) component for querying MaxMind DB (`.mmdb`) databases directly from Pawn scripts.
 
 > [!WARNING]
 > **Development Status**
@@ -9,7 +9,7 @@ Maxora is a fast, thread-safe, and robust [open.mp](https://open.mp/) component 
 
 ## Features
 
-- 🚀 **High Performance**: Uses Memory-Mapped I/O for instant lookups (`O(depth)`) with minimal overhead and zero dynamic allocations in hot paths.
+- 🚀 **High Performance**: Uses Memory-Mapped I/O for instant lookups (`O(depth)`) with minimal overhead and dynamically minimized allocations in hot paths.
 - 🛡️ **Memory Safety**: Implements strict bounds checking, preventing buffer overflows when interacting with the AMX virtual machine.
 - 🔄 **Safe Hot-Swap (Atomic Reload)**: Reloads the database (`.mmdb`) on the fly. If the new file is corrupted or inaccessible, the plugin will keep the previous database alive without crashing the server.
 - 🌐 **Dynamic Path Support**: Natively queries any hierarchy (e.g., `"country.names.en"`) in the MaxMind DB.
@@ -31,8 +31,8 @@ native bool:MMDB_IsLoaded();
 native bool:MMDB_GetString(const ip[], const path[], dest[], size = sizeof(dest));
 native bool:MMDB_GetInt(const ip[], const path[], &dest);
 native bool:MMDB_GetFloat(const ip[], const path[], &Float:dest);
-native bool:MMDB_GetBool(const ip[], const path[]);
-native bool:MMDB_HasField(const ip[], const path[]);
+native bool:MMDB_GetBool(const ip[], const path[], &bool:dest);
+native bool:MMDB_HasField(const ip[], const path[], &bool:exists);
 native bool:MMDB_GetNetmask(const ip[], &dest);
 
 // Helpers for common queries

@@ -13,7 +13,8 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 add_subdirectory(lib/libmaxminddb)
 
 add_library(maxora SHARED
-    src/MaxoraComponent.cpp
+    src/main.cpp
+    src/maxmind_store.cpp
     src/natives.cpp
 )
 

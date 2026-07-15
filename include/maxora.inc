@@ -38,12 +38,12 @@ native bool:MMDB_GetFloat(const ip[], const path[], &Float:dest);
 /**
  * Gets a boolean value from a generic path.
  */
-native bool:MMDB_GetBool(const ip[], const path[]);
+native bool:MMDB_GetBool(const ip[], const path[], &bool:dest);
 
 /**
  * Checks if a specific field/path exists for the given IP.
  */
-native bool:MMDB_HasField(const ip[], const path[]);
+native bool:MMDB_HasField(const ip[], const path[], &bool:exists);
 
 /**
  * Gets the netmask associated with the matched IP entry.
