@@ -24,6 +24,10 @@ target_include_directories(maxora PRIVATE
     lib/compiler/source
 )
 
+if (UNIX)
+    target_include_directories(maxora PRIVATE lib/compiler/source/linux)
+endif()
+
 target_compile_definitions(maxora PRIVATE
     PAWN_NATIVES_HAS_FUNC
     PAWN_NATIVES_HAS_AMX
