@@ -15,6 +15,15 @@ extern IPawnComponent* gPawnComponent;
 
 namespace maxora
 {
+	/**
+	 * @brief Helper to safely extract a string from the AMX machine into a fixed C-string buffer.
+	 * @param amx The AMX instance.
+	 * @param amx_addr The AMX memory address containing the string.
+	 * @param out The destination C-string buffer.
+	 * @param max_len The maximum capacity of the destination buffer.
+	 * @return True if extraction was successful, false if memory errors occurred or if string was
+	 * too long.
+	 */
 	static bool GetAmxString(AMX* amx, cell amx_addr, char* out, int max_len)
 	{
 		if (!gPawnComponent)
@@ -42,7 +51,7 @@ namespace maxora
 
 		if (len >= max_len)
 		{
-			return false; // Falla si el string es mas largo que el buffer
+			return false; // Fail gracefully if the AMX string exceeds our stack buffer capacity.
 		}
 
 		if (len == 0)
@@ -59,7 +68,17 @@ namespace maxora
 		return true;
 	}
 
-	static bool SetAmxString(AMX* amx, cell amx_addr, const char* str, int size)
+	/**
+	 * @brief Helper to write a C-string back into the AMX machine memory.
+	 * @param amx The AMX instance.
+	 * @param amx_addr The AMX memory address pointing to the destination array.
+	 * @param str The source C-string to copy (does not need to be null-terminated).
+	 * @param data_size The actual length of the source string in bytes.
+	 * @param max_size The maximum capacity of the AMX destination array.
+	 * @return True on success, false on memory error.
+	 */
+	static bool SetAmxString(AMX* amx, cell amx_addr, const char* str, uint32_t data_size,
+							 int max_size)
 	{
 		if (!gPawnComponent)
 		{
@@ -78,7 +97,15 @@ namespace maxora
 			return false;
 		}
 
-		if (script->SetString(addr, StringView(str), false, false, size) != 0)
+		int len = static_cast<int>(data_size);
+		if (len >= max_size)
+		{
+			len = max_size - 1;
+		}
+
+		// Use open.mp's StringView which safely accepts a pointer and length without requiring
+		// null-termination.
+		if (script->SetString(addr, StringView(str, len), false, false, max_size) != 0)
 		{
 			return false;
 		}
@@ -86,6 +113,13 @@ namespace maxora
 		return true;
 	}
 
+	/**
+	 * @brief Helper to write a single integer/float cell back into the AMX machine by reference.
+	 * @param amx The AMX instance.
+	 * @param amx_addr The AMX memory address (reference pointer).
+	 * @param value The value to set.
+	 * @return True on success, false on memory error.
+	 */
 	static bool SetAmxCell(AMX* amx, cell amx_addr, cell value)
 	{
 		if (!gPawnComponent)
@@ -108,9 +142,22 @@ namespace maxora
 		return true;
 	}
 
-	// Optimization: Utiliza arrays estáticos por hilo para no hacer reservas dinámicas
+	// Optimization: We use a thread-local static array of pointers to avoid any dynamic memory
+	// allocations (std::vector) during the path parsing phase. Since Pawn scripts in open.mp run in
+	// a specific thread, thread_local provides safety without mutex locking overhead if
+	// multi-threading is ever introduced.
 	static thread_local const char* tls_path_ptrs[32];
 
+	/**
+	 * @brief Parses a dot-separated (or slash-separated) path string into an array of pointers.
+	 *
+	 * This function modifies the input `path` buffer in-place by replacing delimiters with null
+	 * terminators (`\0`), achieving zero-allocation parsing.
+	 *
+	 * @param path The mutable path string (e.g., "country.names.en" becomes
+	 * "country\0names\0en\0").
+	 * @return A null-terminated array of pointers to each path segment, required by libmaxminddb.
+	 */
 	static const char* const* PreparePath(char* path)
 	{
 		int idx = 0;
@@ -132,7 +179,7 @@ namespace maxora
 		{
 			if (*p == delimiter)
 			{
-				*p = '\0'; // Mutamos el string directamente en el stack
+				*p = '\0'; // Mutate the string directly on the stack to separate nodes
 				if (idx < 31)
 				{
 					tls_path_ptrs[idx++] = p + 1;
@@ -143,13 +190,23 @@ namespace maxora
 		return tls_path_ptrs;
 	}
 
+	/**
+	 * @brief Represents the internal outcome of a database query.
+	 */
 	enum class DBResult
 	{
 		Success,
-		FieldNotFound,
-		Error
+		FieldNotFound, // The IP exists, but the requested data field does not.
+		Error		   // A fatal error occurred (e.g. malformed IP, missing DB, memory corruption).
 	};
 
+	/**
+	 * @brief Core engine function that queries the libmaxminddb tree for a specific path.
+	 * @param ip The IP address string to query.
+	 * @param path_ptrs The parsed array of path segments.
+	 * @param entry_data Pointer to the libmaxminddb struct that will hold the result data.
+	 * @return A DBResult indicating the precise outcome of the query.
+	 */
 	static DBResult GetValueFromDB(const char* ip, const char* const* path_ptrs,
 								   MMDB_entry_data_s* entry_data)
 	{
@@ -182,8 +239,9 @@ namespace maxora
 		}
 
 		int status = MMDB_aget_value(&result.entry, entry_data, path_ptrs);
-		
-		if (status == MMDB_LOOKUP_PATH_DOES_NOT_MATCH_DATA_ERROR || (status == MMDB_SUCCESS && !entry_data->has_data))
+
+		if (status == MMDB_LOOKUP_PATH_DOES_NOT_MATCH_DATA_ERROR ||
+			(status == MMDB_SUCCESS && !entry_data->has_data))
 		{
 			return DBResult::FieldNotFound;
 		}
@@ -197,7 +255,12 @@ namespace maxora
 		return DBResult::Success;
 	}
 
-	// Helper for checking success in most natives that expect the field to exist
+	/**
+	 * @brief Helper used by native functions to handle the DBResult.
+	 * Sets the global plugin error message if the query failed.
+	 * @param res The result to evaluate.
+	 * @return True if the query was fully successful, false otherwise.
+	 */
 	static bool EnsureDBSuccess(DBResult res)
 	{
 		if (res == DBResult::FieldNotFound)
@@ -208,7 +271,10 @@ namespace maxora
 		return res == DBResult::Success;
 	}
 
-	// Convert float to cell
+	/**
+	 * @brief Converts a C++ float to a Pawn cell without casting the value, preserving the bit
+	 * pattern.
+	 */
 	static inline cell FloatToCell(float f)
 	{
 		cell c;
@@ -216,6 +282,10 @@ namespace maxora
 		return c;
 	}
 
+	/**
+	 * @brief native bool:MMDB_Load(const filename[]);
+	 * Loads a database into memory.
+	 */
 	cell AMX_NATIVE_CALL n_MMDB_Load(AMX* amx, const cell* params)
 	{
 		MaxmindStore::SetLastError("");
@@ -227,36 +297,49 @@ namespace maxora
 		return MaxmindStore::LoadDB(filename) ? 1 : 0;
 	}
 
+	/**
+	 * @brief native MMDB_Unload();
+	 * Unloads the current database from memory.
+	 */
 	cell AMX_NATIVE_CALL n_MMDB_Unload(AMX* amx, const cell* params)
 	{
 		MaxmindStore::UnloadDB();
 		return 1;
 	}
 
+	/**
+	 * @brief native bool:MMDB_IsLoaded();
+	 * Returns 1 if a database is actively loaded, 0 otherwise.
+	 */
 	cell AMX_NATIVE_CALL n_MMDB_IsLoaded(AMX* amx, const cell* params)
 	{
 		return MaxmindStore::IsLoaded() ? 1 : 0;
 	}
 
+	/**
+	 * @brief native bool:MMDB_GetLastError(dest[], size = sizeof(dest));
+	 * Retrieves the last internal error message generated by the plugin.
+	 */
 	cell AMX_NATIVE_CALL n_MMDB_GetLastError(AMX* amx, const cell* params)
 	{
 		if (params[0] < 2 * sizeof(cell))
 			return 0;
+
 		const std::string& err = MaxmindStore::GetLastError();
-		int size = params[2];
-		if (size <= 0)
-			return 0;
 		if (err.empty())
 		{
-			if (!SetAmxString(amx, params[1], "", size))
-				return 0;
-			return 1;
-		}
-		if (!SetAmxString(amx, params[1], err.c_str(), size))
+			SetAmxString(amx, params[1], "", 0, params[2]);
 			return 0;
+		}
+
+		SetAmxString(amx, params[1], err.c_str(), static_cast<uint32_t>(err.size()), params[2]);
 		return 1;
 	}
 
+	/**
+	 * @brief native bool:MMDB_GetString(const ip[], const path[], dest[], size = sizeof(dest));
+	 * Retrieves a string value from the database.
+	 */
 	cell AMX_NATIVE_CALL n_MMDB_GetString(AMX* amx, const cell* params)
 	{
 		MaxmindStore::SetLastError("");
@@ -264,7 +347,8 @@ namespace maxora
 			return 0;
 		char ip[64];
 		char path[128];
-		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) || !GetAmxString(amx, params[2], path, sizeof(path)))
+		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) ||
+			!GetAmxString(amx, params[2], path, sizeof(path)))
 			return 0;
 
 		int size = params[4];
@@ -281,15 +365,19 @@ namespace maxora
 			return 0;
 		}
 
-		std::string value(entry.utf8_string, entry.data_size);
-		if (!SetAmxString(amx, params[3], value.c_str(), size))
+		if (!SetAmxString(amx, params[3], entry.utf8_string, entry.data_size, size))
 		{
-			MaxmindStore::SetLastError("Invalid AMX address for destination buffer.");
+			MaxmindStore::SetLastError("Failed to write string to AMX.");
 			return 0;
 		}
 		return 1;
 	}
 
+	/**
+	 * @brief native bool:MMDB_GetInt(const ip[], const path[], &dest);
+	 * Retrieves a 16-bit, 32-bit, or 64-bit integer from the database.
+	 * Checks for overflow against the Pawn cell maximum limit.
+	 */
 	cell AMX_NATIVE_CALL n_MMDB_GetInt(AMX* amx, const cell* params)
 	{
 		MaxmindStore::SetLastError("");
@@ -297,7 +385,8 @@ namespace maxora
 			return 0;
 		char ip[64];
 		char path[128];
-		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) || !GetAmxString(amx, params[2], path, sizeof(path)))
+		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) ||
+			!GetAmxString(amx, params[2], path, sizeof(path)))
 			return 0;
 
 		MMDB_entry_data_s entry;
@@ -342,6 +431,10 @@ namespace maxora
 		return 1;
 	}
 
+	/**
+	 * @brief native bool:MMDB_GetFloat(const ip[], const path[], &Float:dest);
+	 * Retrieves a float or double from the database, casting it to a 32-bit Pawn float.
+	 */
 	cell AMX_NATIVE_CALL n_MMDB_GetFloat(AMX* amx, const cell* params)
 	{
 		MaxmindStore::SetLastError("");
@@ -349,7 +442,8 @@ namespace maxora
 			return 0;
 		char ip[64];
 		char path[128];
-		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) || !GetAmxString(amx, params[2], path, sizeof(path)))
+		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) ||
+			!GetAmxString(amx, params[2], path, sizeof(path)))
 			return 0;
 
 		MMDB_entry_data_s entry;
@@ -375,6 +469,10 @@ namespace maxora
 		return 1;
 	}
 
+	/**
+	 * @brief native bool:MMDB_GetBool(const ip[], const path[], &bool:dest);
+	 * Retrieves a boolean value from the database.
+	 */
 	cell AMX_NATIVE_CALL n_MMDB_GetBool(AMX* amx, const cell* params)
 	{
 		MaxmindStore::SetLastError("");
@@ -382,7 +480,8 @@ namespace maxora
 			return 0;
 		char ip[64];
 		char path[128];
-		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) || !GetAmxString(amx, params[2], path, sizeof(path)))
+		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) ||
+			!GetAmxString(amx, params[2], path, sizeof(path)))
 			return 0;
 
 		MMDB_entry_data_s entry;
@@ -403,6 +502,10 @@ namespace maxora
 		return 1;
 	}
 
+	/**
+	 * @brief native bool:MMDB_HasField(const ip[], const path[], &bool:exists);
+	 * Checks if a specific path exists within the IP's data structure without extracting it.
+	 */
 	cell AMX_NATIVE_CALL n_MMDB_HasField(AMX* amx, const cell* params)
 	{
 		MaxmindStore::SetLastError("");
@@ -410,7 +513,8 @@ namespace maxora
 			return 0;
 		char ip[64];
 		char path[128];
-		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) || !GetAmxString(amx, params[2], path, sizeof(path)))
+		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) ||
+			!GetAmxString(amx, params[2], path, sizeof(path)))
 			return 0;
 
 		MMDB_entry_data_s entry;
@@ -431,6 +535,10 @@ namespace maxora
 		return 1;
 	}
 
+	/**
+	 * @brief native bool:MMDB_GetNetmask(const ip[], &dest);
+	 * Retrieves the routing prefix (netmask) associated with the IP.
+	 */
 	cell AMX_NATIVE_CALL n_MMDB_GetNetmask(AMX* amx, const cell* params)
 	{
 		MaxmindStore::SetLastError("");
