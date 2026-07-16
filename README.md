@@ -9,10 +9,10 @@ Maxora is a fast and robust [open.mp](https://open.mp/) component for querying M
 
 ## Features
 
-- 🚀 **High Performance**: Uses Memory-Mapped I/O for instant lookups (`O(depth)`) with minimal overhead and dynamically minimized allocations in hot paths.
+- 🚀 **High Performance**: Uses Memory-Mapped I/O for instant lookups (`O(depth)`) with minimal overhead.
 - 🛡️ **Memory Safety**: Implements strict bounds checking, preventing buffer overflows when interacting with the AMX virtual machine.
 - 🔄 **Safe Hot-Swap (Atomic Reload)**: Reloads the database (`.mmdb`) on the fly. If the new file is corrupted or inaccessible, the plugin will keep the previous database alive without crashing the server.
-- 🌐 **Dynamic Path Support**: Natively queries any hierarchy (e.g., `"country.names.en"`) in the MaxMind DB.
+- 🌐 **Dynamic Path Support**: Natively queries any hierarchy (e.g., `"country.names.en"`) in the MaxMind DB. You can also start the path with `/` to use it as an alternative delimiter if your keys contain literal dots (e.g., `"/domain.com/names"`).
 - 🧩 **open.mp Architecture**: Built using the modern `IComponent` interface from the native open.mp SDK.
 
 ## Pawn API

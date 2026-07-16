@@ -123,10 +123,18 @@ namespace maxora
 			return tls_path_ptrs.data();
 		}
 
-		tls_path_ptrs.push_back(tls_path_buffer.data());
-		for (size_t i = 0; i < tls_path_buffer.size(); ++i)
+		char delimiter = '.';
+		size_t start_idx = 0;
+		if (tls_path_buffer[0] == '/')
 		{
-			if (tls_path_buffer[i] == '.')
+			delimiter = '/';
+			start_idx = 1;
+		}
+
+		tls_path_ptrs.push_back(tls_path_buffer.data() + start_idx);
+		for (size_t i = start_idx; i < tls_path_buffer.size(); ++i)
+		{
+			if (tls_path_buffer[i] == delimiter)
 			{
 				tls_path_buffer[i] = '\0';
 				tls_path_ptrs.push_back(&tls_path_buffer[i + 1]);
@@ -136,13 +144,20 @@ namespace maxora
 		return tls_path_ptrs.data();
 	}
 
-	static bool GetValueFromDB(const char* ip, const char* const* path_ptrs,
-							   MMDB_entry_data_s* entry_data)
+	enum class DBResult
+	{
+		Success,
+		FieldNotFound,
+		Error
+	};
+
+	static DBResult GetValueFromDB(const char* ip, const char* const* path_ptrs,
+								   MMDB_entry_data_s* entry_data)
 	{
 		if (!MaxmindStore::IsLoaded())
 		{
 			MaxmindStore::SetLastError("Database not loaded.");
-			return false;
+			return DBResult::Error;
 		}
 
 		int gai_err, mmdb_err;
@@ -152,35 +167,45 @@ namespace maxora
 		if (gai_err != 0)
 		{
 			MaxmindStore::SetLastError(gai_strerror(gai_err));
-			return false;
+			return DBResult::Error;
 		}
 
 		if (mmdb_err != 0)
 		{
 			MaxmindStore::SetLastError(MMDB_strerror(mmdb_err));
-			return false;
+			return DBResult::Error;
 		}
 
 		if (!result.found_entry)
 		{
 			MaxmindStore::SetLastError("IP not found.");
-			return false;
+			return DBResult::Error;
 		}
 
 		int status = MMDB_aget_value(&result.entry, entry_data, path_ptrs);
 		if (status != 0)
 		{
 			MaxmindStore::SetLastError(MMDB_strerror(status));
-			return false;
+			return DBResult::Error;
 		}
 
 		if (!entry_data->has_data)
 		{
+			return DBResult::FieldNotFound;
+		}
+
+		return DBResult::Success;
+	}
+
+	// Helper for checking success in most natives that expect the field to exist
+	static bool EnsureDBSuccess(DBResult res)
+	{
+		if (res == DBResult::FieldNotFound)
+		{
 			MaxmindStore::SetLastError("Field not found.");
 			return false;
 		}
-
-		return true;
+		return res == DBResult::Success;
 	}
 
 	// Convert float to cell
@@ -225,7 +250,7 @@ namespace maxora
 		{
 			if (!SetAmxString(amx, params[1], "", size))
 				return 0;
-			return 0;
+			return 1;
 		}
 		if (!SetAmxString(amx, params[1], err.c_str(), size))
 			return 0;
@@ -246,7 +271,7 @@ namespace maxora
 			return 0;
 
 		MMDB_entry_data_s entry;
-		if (!GetValueFromDB(ip.c_str(), PreparePath(path), &entry))
+		if (!EnsureDBSuccess(GetValueFromDB(ip.c_str(), PreparePath(path), &entry)))
 			return 0;
 
 		if (entry.type != MMDB_DATA_TYPE_UTF8_STRING)
@@ -274,7 +299,7 @@ namespace maxora
 			return 0;
 
 		MMDB_entry_data_s entry;
-		if (!GetValueFromDB(ip.c_str(), PreparePath(path), &entry))
+		if (!EnsureDBSuccess(GetValueFromDB(ip.c_str(), PreparePath(path), &entry)))
 			return 0;
 
 		cell result;
@@ -284,7 +309,12 @@ namespace maxora
 			result = entry.uint16;
 			break;
 		case MMDB_DATA_TYPE_UINT32:
-			result = entry.uint32;
+			if (entry.uint32 > static_cast<uint32_t>(std::numeric_limits<cell>::max()))
+			{
+				MaxmindStore::SetLastError("Integer overflow: value exceeds cell bounds.");
+				return 0;
+			}
+			result = static_cast<cell>(entry.uint32);
 			break;
 		case MMDB_DATA_TYPE_INT32:
 			result = entry.int32;
@@ -320,7 +350,7 @@ namespace maxora
 			return 0;
 
 		MMDB_entry_data_s entry;
-		if (!GetValueFromDB(ip.c_str(), PreparePath(path), &entry))
+		if (!EnsureDBSuccess(GetValueFromDB(ip.c_str(), PreparePath(path), &entry)))
 			return 0;
 
 		float val = 0.0f;
@@ -352,7 +382,7 @@ namespace maxora
 			return 0;
 
 		MMDB_entry_data_s entry;
-		if (!GetValueFromDB(ip.c_str(), PreparePath(path), &entry))
+		if (!EnsureDBSuccess(GetValueFromDB(ip.c_str(), PreparePath(path), &entry)))
 			return 0;
 
 		if (entry.type != MMDB_DATA_TYPE_BOOLEAN)
@@ -379,20 +409,14 @@ namespace maxora
 			return 0;
 
 		MMDB_entry_data_s entry;
-		bool exists = true;
-		if (!GetValueFromDB(ip.c_str(), PreparePath(path), &entry))
+		DBResult res = GetValueFromDB(ip.c_str(), PreparePath(path), &entry);
+
+		if (res == DBResult::Error)
 		{
-			if (MaxmindStore::GetLastError() == "Field not found.")
-			{
-				exists = false;
-				MaxmindStore::SetLastError(""); // This is not an error for HasField
-			}
-			else
-			{
-				// Actual error like DB not loaded, invalid IP, etc.
-				return 0;
-			}
+			return 0;
 		}
+
+		bool exists = (res == DBResult::Success);
 
 		if (!SetAmxCell(amx, params[3], exists ? 1 : 0))
 		{
@@ -457,8 +481,9 @@ namespace maxora
 			return false;
 
 		MMDB_entry_data_s entry;
-		if (!GetValueFromDB(ip.c_str(), path, &entry))
+		if (!EnsureDBSuccess(GetValueFromDB(ip.c_str(), path, &entry)))
 			return false;
+
 		if (entry.type != MMDB_DATA_TYPE_UTF8_STRING)
 		{
 			MaxmindStore::SetLastError("Field is not a string.");
@@ -506,12 +531,19 @@ namespace maxora
 
 		const char* path[] = {"autonomous_system_number", nullptr};
 		MMDB_entry_data_s entry;
-		if (!GetValueFromDB(ip.c_str(), path, &entry))
+		if (!EnsureDBSuccess(GetValueFromDB(ip.c_str(), path, &entry)))
 			return 0;
 
 		cell result;
 		if (entry.type == MMDB_DATA_TYPE_UINT32)
-			result = entry.uint32;
+		{
+			if (entry.uint32 > static_cast<uint32_t>(std::numeric_limits<cell>::max()))
+			{
+				MaxmindStore::SetLastError("Integer overflow: value exceeds cell bounds.");
+				return 0;
+			}
+			result = static_cast<cell>(entry.uint32);
+		}
 		else if (entry.type == MMDB_DATA_TYPE_INT32)
 			result = entry.int32;
 		else if (entry.type == MMDB_DATA_TYPE_UINT64)
