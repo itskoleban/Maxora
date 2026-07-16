@@ -1,129 +1,148 @@
 # Maxora
 
-Maxora is a highly optimized, production-ready, zero-allocation [open.mp](https://open.mp/) component for querying [MaxMind DB (`.mmdb`)](https://maxmind.github.io/MaxMind-DB/) databases directly from Pawn scripts.
+Maxora is a highly optimized, zero-allocation [open.mp](https://open.mp/) component for querying [MaxMind DB (`.mmdb`)](https://maxmind.github.io/MaxMind-DB/) databases directly from Pawn scripts.
 
-Designed for high-concurrency SA-MP/open.mp servers, Maxora provides instant IP geolocation lookups (such as Country, City, ASN, and ISP) without introducing latency or garbage collection overhead to the main server thread.
+It provides instant IP geolocation lookups (such as Country, City, ASN, and ISP) for high-concurrency open.mp servers without introducing latency or garbage collection overhead to the main server thread.
 
 ## Features
 
-- 🚀 **High Performance**: Uses Memory-Mapped I/O (`MMDB_MODE_MMAP`) for instant lookups (`O(depth)`) with minimal overhead. The database is accessed directly from disk cache without loading the entire structure into RAM.
-- ⚡ **Zero Heap Allocations**: The plugin executes its hot paths (reading from AMX, preparing paths, and querying the database) entirely on the C++ stack using fixed-size buffers and `thread_local` memory arrays. It performs **0 dynamic heap allocations** per query.
-- 🛡️ **Memory Safety**: Implements strict bounds checking and utilizes open.mp's native `StringView` to prevent buffer overflows and out-of-bounds reads when interacting with the AMX virtual machine.
-- 🔄 **Safe Hot-Swap (Atomic Reload)**: Reloads the database (`.mmdb`) on the fly. If the new file is corrupted or inaccessible, the plugin will gracefully reject it while keeping the previous database alive, preventing server crashes during live updates.
-- 🌐 **Dynamic Path Support**: Natively queries any hierarchy (e.g., `"country.names.en"`) in the MaxMind DB. You can also start the path with `/` to use it as an alternative delimiter if your keys contain literal dots (e.g., `"/domain.com/names"`).
-- 🧩 **Modern Architecture**: Built natively using the modern `IComponent` interface from the [open.mp SDK](https://github.com/openmultiplayer/open.mp).
+- **High Performance (Memory-Mapped I/O)**: Uses `MMDB_MODE_MMAP` for instant `O(depth)` lookups directly from the OS disk cache.
+- **Zero Heap Allocations**: Executes hot paths (reading from AMX, preparing paths, and querying the database) entirely on the C++ stack using fixed-size buffers and `thread_local` memory arrays. Performs 0 dynamic heap allocations per query.
+- **Memory Safety Guarantee**: Utilizes open.mp's native `StringView` and strict bounds checking to prevent buffer overflows during AMX virtual machine interaction.
+- **Atomic Hot-Swapping**: Reloads the `.mmdb` database safely at runtime. Invalid or corrupted databases are rejected gracefully while preserving the existing database instance.
+- **Dynamic Path Navigation**: Natively queries any arbitrary depth hierarchy (e.g., `"country.names.en"`) in the DB tree. Supports up to 127 path segments. Custom delimiter `/` is supported.
+
+## Architecture / Design Overview
+
+Maxora is built strictly against the modern `IComponent` interface of the open.mp SDK.
+
+- **Pawn Natives**: Bridges the Pawn AMX machine and the C++ backend (`src/natives.cpp`). Extracts arguments using pointer references and limits to prevent null-termination vulnerabilities.
+- **Backend Engine**: Wraps the standard C API of `libmaxminddb` with C++ thread-local storage (`src/maxmind_store.cpp`). It manages the lifecycle of the `MMDB_s` context to provide atomic reads and safe swapping.
+- **Zero-Allocation Parser**: The internal `PreparePath` function mutates the path string in-place on the stack, constructing a node-pointer array without relying on heap construction.
+
+## Project Structure
+
+- `include/maxora.inc`: Pawn API declarations and stock wrappers.
+- `src/`: Core C++ source code (`main.cpp`, `maxmind_store.cpp`, `natives.cpp`).
+- `test/test_backend.cpp`: Isolated C++ test suite for backend store logic.
+- `lib/`: Third-party dependencies (`libmaxminddb`, `open.mp SDK`).
+- `.github/workflows/`: CI/CD automation pipelines.
+
+## Requirements
+
+- **Server**: open.mp (x86 architecture).
+- **Supported OS**: Windows, Linux.
+- **Database**: Valid MaxMind Database (`.mmdb` format).
+- **Build Requirements**: CMake 3.19+, C++17 Compiler (MSVC 19+, GCC, or Clang), `gcc-multilib` / `g++-multilib` for 32-bit Linux builds.
 
 ## Installation
 
-1. Download the latest compiled `maxora.dll` (Windows) or `libmaxora.so` (Linux) from the [Releases page](../../releases).
-2. Place it in your open.mp `components` folder.
+1. Download the latest compiled binaries (`maxora.dll` for Windows or `libmaxora.so` for Linux) from the Releases page.
+2. Place the binary in your open.mp `components` directory.
 3. Add `maxora` to the `components` section of your `config.json`.
-4. Include `maxora.inc` in your Pawn script.
-5. Download a MaxMind database (e.g., [GeoLite2 Free Geolocation Data](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data)) and place it in your server root or an accessible path.
+4. Download a `.mmdb` database (e.g., GeoLite2 Free Geolocation Data) and place it in the server's root directory.
+5. Move `include/maxora.inc` to your `pawno/include` folder.
+6. Include the library in your script:
+   ```pawn
+   #include <maxora>
+   ```
 
-## Pawn API
+## Configuration
 
-The native declarations and stock helpers can be found in `include/maxora.inc`. To prevent ambiguity issues with numeric return values, most data extraction natives return a `bool` (indicating success or failure) and output the requested value into a reference variable (`&dest`).
+There are no specific external configuration files or environment variables required by Maxora. All configurations are handled programmatically through the Pawn API via `MMDB_Load`.
 
-### Main Functions
-
-```pawn
-// Database loading, unloading, and inspection
-native bool:MMDB_Load(const filename[]);
-native MMDB_Unload();
-native bool:MMDB_IsLoaded();
-
-// Dynamic queries
-native bool:MMDB_GetString(const ip[], const path[], dest[], size = sizeof(dest));
-native bool:MMDB_GetInt(const ip[], const path[], &dest);
-native bool:MMDB_GetFloat(const ip[], const path[], &Float:dest);
-native bool:MMDB_GetBool(const ip[], const path[], &bool:dest);
-native bool:MMDB_HasField(const ip[], const path[], &bool:exists);
-native bool:MMDB_GetNetmask(const ip[], &dest);
-
-// Error debugging
-native bool:MMDB_GetLastError(dest[], size = sizeof(dest));
-```
-
-### Stock Helpers
-
-The include file provides `stock` wrappers for the most common data fields. These helpers provide a simpler syntax and only compile into your script if you actually use them.
+## Usage
 
 ```pawn
-stock bool:MMDB_GetCountryCode(const ip[], dest[], size = sizeof(dest));
-stock bool:MMDB_GetCountryName(const ip[], dest[], size = sizeof(dest), const lang[] = MMDB_LANG_ENGLISH);
-stock bool:MMDB_GetCityName(const ip[], dest[], size = sizeof(dest), const lang[] = MMDB_LANG_ENGLISH);
-stock bool:MMDB_GetASN(const ip[], &dest);
-stock bool:MMDB_GetISP(const ip[], dest[], size = sizeof(dest));
-```
-
-### Language Constants
-
-When querying names (like Country or City), you can pass a language code. Maxora provides the following macros for convenience:
-
-- `MMDB_LANG_ENGLISH` ("en")
-- `MMDB_LANG_SPANISH` ("es")
-- `MMDB_LANG_GERMAN` ("de")
-- `MMDB_LANG_FRENCH` ("fr")
-- `MMDB_LANG_JAPANESE` ("ja")
-- `MMDB_LANG_PORTUGUESE` ("pt-BR")
-- `MMDB_LANG_RUSSIAN` ("ru")
-- `MMDB_LANG_CHINESE` ("zh-CN")
-
-### Usage Example
-
-```pawn
-#include <a_samp>
+#include <open.mp>
 #include <maxora>
 
 main()
 {
-    // You can download this database from https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
+    // Ensure the .mmdb file is in your server's root directory.
     if (MMDB_Load("GeoLite2-City.mmdb"))
     {
         print("Database loaded successfully!");
 
-        new country[64], city[64];
+        new country[64];
         new const ip[] = "8.8.8.8";
 
-        // Using stock helpers with Spanish language constant
+        // Querying a localized Spanish country name using stock helpers
         if (MMDB_GetCountryName(ip, country, sizeof(country), MMDB_LANG_SPANISH))
         {
             printf("Country (Spanish): %s", country);
-        }
-
-        if (MMDB_GetCityName(ip, city, sizeof(city), MMDB_LANG_ENGLISH))
-        {
-            printf("City (English): %s", city);
-        }
-        else
-        {
-            // If the IP doesn't have city data, print the internal error reason
-            new err[128];
-            MMDB_GetLastError(err, sizeof(err));
-            printf("Failed to get city: %s", err);
         }
     }
 }
 ```
 
-## Compilation
+## API Documentation
 
-**Requirements**:
+All data extraction natives return a boolean indicating success or failure. Data is assigned safely to reference variables (`&dest`).
 
-- CMake 3.19 or higher
-- C++ Compiler (MSVC 19+, GCC, or Clang) with C++17 support.
+### Core Natives
 
-```bash
-cmake -S . -B build
-cmake --build build --config Release
-```
+- `bool:MMDB_Load(const filename[])`: Loads an `.mmdb` file into memory.
+- `MMDB_Unload()`: Safely unloads the database and frees OS file descriptors.
+- `bool:MMDB_IsLoaded()`: Returns `true` if a database is actively mapped in memory.
+- `bool:MMDB_GetLastError(dest[], size)`: Extracts the last internal error message generated by the component.
 
-The compiled component will be available in the `build/Release` directory (Windows) or `build` (Linux) under the name `maxora.dll` / `libmaxora.so`.
+### Data Extraction Natives
 
-## Dependencies
+- `bool:MMDB_GetString(const ip[], const path[], dest[], size = sizeof(dest))`
+- `bool:MMDB_GetInt(const ip[], const path[], &dest)`
+- `bool:MMDB_GetFloat(const ip[], const path[], &Float:dest)`
+- `bool:MMDB_GetBool(const ip[], const path[], &bool:dest)`
+- `bool:MMDB_HasField(const ip[], const path[], &bool:exists)`
+- `bool:MMDB_GetNetmask(const ip[], &dest)`
 
-This component statically includes and builds against the following dependencies:
+### Helper Functions (Stocks)
 
-- [libmaxminddb](https://github.com/maxmind/libmaxminddb) (Provides the C API for `.mmdb` files)
-- [open.mp SDK](https://github.com/openmultiplayer/open.mp) (Provides the modern AMX bindings)
+These wrappers are provided in `maxora.inc`. They only compile into your script if utilized.
+
+- `bool:MMDB_GetCountryCode(const ip[], dest[], size = sizeof(dest))`
+- `bool:MMDB_GetCountryName(const ip[], dest[], size = sizeof(dest), const lang[] = MMDB_LANG_ENGLISH)`
+- `bool:MMDB_GetCityName(const ip[], dest[], size = sizeof(dest), const lang[] = MMDB_LANG_ENGLISH)`
+- `bool:MMDB_GetASN(const ip[], &dest)`
+- `bool:MMDB_GetISP(const ip[], dest[], size = sizeof(dest))`
+
+#### Language Constants
+
+`MMDB_LANG_ENGLISH` ("en"), `MMDB_LANG_SPANISH` ("es"), `MMDB_LANG_GERMAN` ("de"), `MMDB_LANG_FRENCH` ("fr"), `MMDB_LANG_JAPANESE` ("ja"), `MMDB_LANG_PORTUGUESE` ("pt-BR"), `MMDB_LANG_RUSSIAN` ("ru"), `MMDB_LANG_CHINESE` ("zh-CN").
+
+## External Integrations
+
+- [libmaxminddb](https://github.com/maxmind/libmaxminddb): C library used for memory-mapped lookups against the `.mmdb` format.
+- [open.mp SDK](https://github.com/openmultiplayer/open.mp): Provides modern AMX environment headers and the `IComponent` interface.
+
+## Error Handling / Troubleshooting
+
+Maxora safely catches internal exceptions and exposes them via `MMDB_GetLastError`.
+Known internal errors:
+
+- `Database not loaded.`: Attempted to query data before calling `MMDB_Load`.
+- `Field not found.`: The specific JSON path requested does not exist for the given IP block.
+- `Path contains too many segments (limit 127).`: The requested path exceeds the delimiter node limit.
+- `Invalid AMX address or filename too long.`: Memory issue within the AMX environment during string retrieval.
+
+## Development Guide
+
+1. Clone the repository recursively to fetch submodules: `git clone --recursive https://github.com/itskoleban/Maxora.git`
+2. Configure CMake: `cmake -S . -B build -A Win32 -DCMAKE_BUILD_TYPE=Release`
+3. Build the component: `cmake --build build --config Release`
+
+## Testing
+
+The project includes a standalone C++ test target named `maxora_test` to verify backend store behavior independently of the open.mp runtime.
+
+To execute:
+
+1. Compile the `maxora_test` target via CMake.
+2. Run the resulting executable located in `build/Release/maxora_test.exe` (or `build/maxora_test` on Linux).
+
+## Build and Release Process
+
+- **CI/CD**: Managed via GitHub Actions (`.github/workflows/release.yml`).
+- Triggers on pushed version tags (`v*`).
+- Compiles standard 32-bit `maxora.dll` for Windows and `libmaxora.so` for Linux, utilizing GCC `-m32` cross-compilation on Ubuntu.
+- Automatically creates a GitHub Release containing both artifacts.
