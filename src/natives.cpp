@@ -146,7 +146,7 @@ namespace maxora
 	// allocations (std::vector) during the path parsing phase. Since Pawn scripts in open.mp run in
 	// a specific thread, thread_local provides safety without mutex locking overhead if
 	// multi-threading is ever introduced.
-	static thread_local const char* tls_path_ptrs[32];
+	static thread_local const char* tls_path_ptrs[128];
 
 	/**
 	 * @brief Parses a dot-separated (or slash-separated) path string into an array of pointers.
@@ -180,10 +180,12 @@ namespace maxora
 			if (*p == delimiter)
 			{
 				*p = '\0'; // Mutate the string directly on the stack to separate nodes
-				if (idx < 31)
+				if (idx >= 127)
 				{
-					tls_path_ptrs[idx++] = p + 1;
+					MaxmindStore::SetLastError("Path contains too many segments (limit 127).");
+					return nullptr;
 				}
+				tls_path_ptrs[idx++] = p + 1;
 			}
 		}
 		tls_path_ptrs[idx] = nullptr;
@@ -210,6 +212,12 @@ namespace maxora
 	static DBResult GetValueFromDB(const char* ip, const char* const* path_ptrs,
 								   MMDB_entry_data_s* entry_data)
 	{
+		if (!path_ptrs)
+		{
+			// The error message was already set by PreparePath
+			return DBResult::Error;
+		}
+
 		if (!MaxmindStore::IsLoaded())
 		{
 			MaxmindStore::SetLastError("Database not loaded.");
@@ -293,7 +301,10 @@ namespace maxora
 			return 0;
 		char filename[256];
 		if (!GetAmxString(amx, params[1], filename, sizeof(filename)))
+		{
+			MaxmindStore::SetLastError("Invalid AMX address or filename too long.");
 			return 0;
+		}
 		return MaxmindStore::LoadDB(filename) ? 1 : 0;
 	}
 
@@ -328,11 +339,17 @@ namespace maxora
 		const std::string& err = MaxmindStore::GetLastError();
 		if (err.empty())
 		{
-			SetAmxString(amx, params[1], "", 0, params[2]);
+			if (!SetAmxString(amx, params[1], "", 0, params[2]))
+			{
+				return 0;
+			}
 			return 0;
 		}
 
-		SetAmxString(amx, params[1], err.c_str(), static_cast<uint32_t>(err.size()), params[2]);
+		if (!SetAmxString(amx, params[1], err.c_str(), static_cast<uint32_t>(err.size()), params[2]))
+		{
+			return 0;
+		}
 		return 1;
 	}
 
