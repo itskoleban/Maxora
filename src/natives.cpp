@@ -15,7 +15,6 @@ extern IPawnComponent* gPawnComponent;
 
 namespace maxora
 {
-
 	// Helper to get string from AMX
 	static bool GetAmxString(AMX* amx, cell amx_addr, std::string& out)
 	{
@@ -468,119 +467,6 @@ namespace maxora
 		return 1;
 	}
 
-	static bool GetStringHelper(AMX* amx, const cell* params, const char* const* path)
-	{
-		if (params[0] < 3 * sizeof(cell))
-			return false;
-		std::string ip;
-		if (!GetAmxString(amx, params[1], ip))
-			return false;
-
-		int size = params[3];
-		if (size <= 0)
-			return false;
-
-		MMDB_entry_data_s entry;
-		if (!EnsureDBSuccess(GetValueFromDB(ip.c_str(), path, &entry)))
-			return false;
-
-		if (entry.type != MMDB_DATA_TYPE_UTF8_STRING)
-		{
-			MaxmindStore::SetLastError("Field is not a string.");
-			return false;
-		}
-
-		std::string value(entry.utf8_string, entry.data_size);
-		if (!SetAmxString(amx, params[2], value.c_str(), size))
-		{
-			MaxmindStore::SetLastError("Invalid AMX address for destination buffer.");
-			return false;
-		}
-		return true;
-	}
-
-	cell AMX_NATIVE_CALL n_MMDB_GetCountryCode(AMX* amx, const cell* params)
-	{
-		MaxmindStore::SetLastError("");
-		const char* path[] = {"country", "iso_code", nullptr};
-		return GetStringHelper(amx, params, path) ? 1 : 0;
-	}
-
-	cell AMX_NATIVE_CALL n_MMDB_GetCountryName(AMX* amx, const cell* params)
-	{
-		MaxmindStore::SetLastError("");
-		const char* path[] = {"country", "names", "en", nullptr};
-		return GetStringHelper(amx, params, path) ? 1 : 0;
-	}
-
-	cell AMX_NATIVE_CALL n_MMDB_GetCityName(AMX* amx, const cell* params)
-	{
-		MaxmindStore::SetLastError("");
-		const char* path[] = {"city", "names", "en", nullptr};
-		return GetStringHelper(amx, params, path) ? 1 : 0;
-	}
-
-	cell AMX_NATIVE_CALL n_MMDB_GetASN(AMX* amx, const cell* params)
-	{
-		MaxmindStore::SetLastError("");
-		if (params[0] < 2 * sizeof(cell))
-			return 0;
-		std::string ip;
-		if (!GetAmxString(amx, params[1], ip))
-			return 0;
-
-		const char* path[] = {"autonomous_system_number", nullptr};
-		MMDB_entry_data_s entry;
-		if (!EnsureDBSuccess(GetValueFromDB(ip.c_str(), path, &entry)))
-			return 0;
-
-		cell result;
-		if (entry.type == MMDB_DATA_TYPE_UINT32)
-		{
-			if (entry.uint32 > static_cast<uint32_t>(std::numeric_limits<cell>::max()))
-			{
-				MaxmindStore::SetLastError("Integer overflow: value exceeds cell bounds.");
-				return 0;
-			}
-			result = static_cast<cell>(entry.uint32);
-		}
-		else if (entry.type == MMDB_DATA_TYPE_INT32)
-			result = entry.int32;
-		else if (entry.type == MMDB_DATA_TYPE_UINT64)
-		{
-			if (entry.uint64 > static_cast<uint64_t>(std::numeric_limits<cell>::max()))
-			{
-				MaxmindStore::SetLastError("Integer overflow: value exceeds cell bounds.");
-				return 0;
-			}
-			result = static_cast<cell>(entry.uint64);
-		}
-		else
-		{
-			MaxmindStore::SetLastError("Field is not an integer.");
-			return 0;
-		}
-
-		if (!SetAmxCell(amx, params[2], result))
-		{
-			MaxmindStore::SetLastError("Invalid AMX address for destination reference.");
-			return 0;
-		}
-		return 1;
-	}
-
-	cell AMX_NATIVE_CALL n_MMDB_GetISP(AMX* amx, const cell* params)
-	{
-		MaxmindStore::SetLastError("");
-		const char* path1[] = {"isp", nullptr};
-		if (GetStringHelper(amx, params, path1))
-			return 1;
-
-		MaxmindStore::SetLastError(""); // clear error before fallback
-		const char* path2[] = {"autonomous_system_organization", nullptr};
-		return GetStringHelper(amx, params, path2) ? 1 : 0;
-	}
-
 	const AMX_NATIVE_INFO maxora_natives[] = {{"MMDB_Load", n_MMDB_Load},
 											  {"MMDB_Unload", n_MMDB_Unload},
 											  {"MMDB_IsLoaded", n_MMDB_IsLoaded},
@@ -591,11 +477,6 @@ namespace maxora
 											  {"MMDB_HasField", n_MMDB_HasField},
 											  {"MMDB_GetNetmask", n_MMDB_GetNetmask},
 											  {"MMDB_GetLastError", n_MMDB_GetLastError},
-											  {"MMDB_GetCountryCode", n_MMDB_GetCountryCode},
-											  {"MMDB_GetCountryName", n_MMDB_GetCountryName},
-											  {"MMDB_GetCityName", n_MMDB_GetCityName},
-											  {"MMDB_GetASN", n_MMDB_GetASN},
-											  {"MMDB_GetISP", n_MMDB_GetISP},
 											  {0, 0}};
 
 	void RegisterNatives(IPawnScript& script)

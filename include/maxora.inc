@@ -56,30 +56,62 @@ native bool:MMDB_GetNetmask(const ip[], &dest);
 native bool:MMDB_GetLastError(dest[], size = sizeof(dest));
 
 // ----------------------------------------------------
+// Supported Languages in MaxMind DBs
+// ----------------------------------------------------
+#define MMDB_LANG_ENGLISH      "en"
+#define MMDB_LANG_GERMAN       "de"
+#define MMDB_LANG_SPANISH      "es"
+#define MMDB_LANG_FRENCH       "fr"
+#define MMDB_LANG_JAPANESE     "ja"
+#define MMDB_LANG_PORTUGUESE   "pt-BR"
+#define MMDB_LANG_RUSSIAN      "ru"
+#define MMDB_LANG_CHINESE      "zh-CN"
+
+// ----------------------------------------------------
 // Helpers for common database fields (City, ASN, ISP)
 // ----------------------------------------------------
 
 /**
  * Gets the ISO 2-letter country code.
  */
-native bool:MMDB_GetCountryCode(const ip[], dest[], size = sizeof(dest));
+stock bool:MMDB_GetCountryCode(const ip[], dest[], size = sizeof(dest))
+{
+    return MMDB_GetString(ip, "country.iso_code", dest, size);
+}
 
 /**
- * Gets the English country name.
+ * Gets the country name (defaults to MMDB_LANG_ENGLISH).
  */
-native bool:MMDB_GetCountryName(const ip[], dest[], size = sizeof(dest));
+stock bool:MMDB_GetCountryName(const ip[], dest[], size = sizeof(dest), const lang[] = MMDB_LANG_ENGLISH)
+{
+    new path[64];
+    format(path, sizeof(path), "country.names.%s", lang);
+    return MMDB_GetString(ip, path, dest, size);
+}
 
 /**
- * Gets the English city name.
+ * Gets the city name (defaults to MMDB_LANG_ENGLISH).
  */
-native bool:MMDB_GetCityName(const ip[], dest[], size = sizeof(dest));
+stock bool:MMDB_GetCityName(const ip[], dest[], size = sizeof(dest), const lang[] = MMDB_LANG_ENGLISH)
+{
+    new path[64];
+    format(path, sizeof(path), "city.names.%s", lang);
+    return MMDB_GetString(ip, path, dest, size);
+}
 
 /**
  * Gets the Autonomous System Number (ASN).
  */
-native bool:MMDB_GetASN(const ip[], &dest);
+stock bool:MMDB_GetASN(const ip[], &dest)
+{
+    return MMDB_GetInt(ip, "autonomous_system_number", dest);
+}
 
 /**
  * Gets the ISP or Organization name.
  */
-native bool:MMDB_GetISP(const ip[], dest[], size = sizeof(dest));
+stock bool:MMDB_GetISP(const ip[], dest[], size = sizeof(dest))
+{
+    if (MMDB_GetString(ip, "isp", dest, size)) return true;
+    return MMDB_GetString(ip, "autonomous_system_organization", dest, size);
+}

@@ -35,12 +35,12 @@ native bool:MMDB_GetBool(const ip[], const path[], &bool:dest);
 native bool:MMDB_HasField(const ip[], const path[], &bool:exists);
 native bool:MMDB_GetNetmask(const ip[], &dest);
 
-// Helpers for common queries
-native bool:MMDB_GetCountryCode(const ip[], dest[], size = sizeof(dest));
-native bool:MMDB_GetCountryName(const ip[], dest[], size = sizeof(dest));
-native bool:MMDB_GetCityName(const ip[], dest[], size = sizeof(dest));
-native bool:MMDB_GetASN(const ip[], &dest);
-native bool:MMDB_GetISP(const ip[], dest[], size = sizeof(dest));
+// Helpers for common queries (provided as Pawn stocks for convenience)
+stock bool:MMDB_GetCountryCode(const ip[], dest[], size = sizeof(dest));
+stock bool:MMDB_GetCountryName(const ip[], dest[], size = sizeof(dest), const lang[] = "en");
+stock bool:MMDB_GetCityName(const ip[], dest[], size = sizeof(dest), const lang[] = "en");
+stock bool:MMDB_GetASN(const ip[], &dest);
+stock bool:MMDB_GetISP(const ip[], dest[], size = sizeof(dest));
 
 // Error debugging
 native bool:MMDB_GetLastError(dest[], size = sizeof(dest));

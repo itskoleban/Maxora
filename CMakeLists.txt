@@ -39,3 +39,11 @@ target_link_libraries(maxora PRIVATE
 if (WIN32)
     target_link_libraries(maxora PRIVATE ws2_32)
 endif()
+
+# Backend Test Executable
+add_executable(maxora_test test/test_backend.cpp)
+target_include_directories(maxora_test PRIVATE lib/libmaxminddb/include src)
+target_link_libraries(maxora_test PRIVATE maxminddb)
+if (WIN32)
+    target_link_libraries(maxora_test PRIVATE ws2_32)
+endif()
