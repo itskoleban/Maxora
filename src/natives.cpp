@@ -182,15 +182,16 @@ namespace maxora
 		}
 
 		int status = MMDB_aget_value(&result.entry, entry_data, path_ptrs);
-		if (status != 0)
+		
+		if (status == MMDB_LOOKUP_PATH_DOES_NOT_MATCH_DATA_ERROR || (status == MMDB_SUCCESS && !entry_data->has_data))
+		{
+			return DBResult::FieldNotFound;
+		}
+
+		if (status != MMDB_SUCCESS)
 		{
 			MaxmindStore::SetLastError(MMDB_strerror(status));
 			return DBResult::Error;
-		}
-
-		if (!entry_data->has_data)
-		{
-			return DBResult::FieldNotFound;
 		}
 
 		return DBResult::Success;
