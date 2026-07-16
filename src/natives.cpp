@@ -15,8 +15,7 @@ extern IPawnComponent* gPawnComponent;
 
 namespace maxora
 {
-	// Helper to get string from AMX
-	static bool GetAmxString(AMX* amx, cell amx_addr, std::string& out)
+	static bool GetAmxString(AMX* amx, cell amx_addr, char* out, int max_len)
 	{
 		if (!gPawnComponent)
 		{
@@ -41,19 +40,22 @@ namespace maxora
 			return false;
 		}
 
+		if (len >= max_len)
+		{
+			return false; // Falla si el string es mas largo que el buffer
+		}
+
 		if (len == 0)
 		{
-			out.clear();
+			out[0] = '\0';
 			return true;
 		}
 
-		out.resize(len + 1);
-		if (script->GetString(out.data(), addr, false, len + 1) != 0)
+		if (script->GetString(out, addr, false, len + 1) != 0)
 		{
 			return false;
 		}
 
-		out.pop_back(); // Remove the null terminator to keep std::string size accurate
 		return true;
 	}
 
@@ -106,41 +108,39 @@ namespace maxora
 		return true;
 	}
 
-	// Optimization: Replaces '.' with '\0' in a mutable buffer and populates a static vector of
-	// pointers
-	static thread_local std::string tls_path_buffer;
-	static thread_local std::vector<const char*> tls_path_ptrs;
+	// Optimization: Utiliza arrays estáticos por hilo para no hacer reservas dinámicas
+	static thread_local const char* tls_path_ptrs[32];
 
-	static const char* const* PreparePath(const std::string& path)
+	static const char* const* PreparePath(char* path)
 	{
-		tls_path_buffer = path;
-		tls_path_ptrs.clear();
-
-		if (tls_path_buffer.empty())
+		int idx = 0;
+		if (!path || path[0] == '\0')
 		{
-			tls_path_ptrs.push_back(nullptr);
-			return tls_path_ptrs.data();
+			tls_path_ptrs[0] = nullptr;
+			return tls_path_ptrs;
 		}
 
 		char delimiter = '.';
-		size_t start_idx = 0;
-		if (tls_path_buffer[0] == '/')
+		if (path[0] == '/')
 		{
 			delimiter = '/';
-			start_idx = 1;
+			path++;
 		}
 
-		tls_path_ptrs.push_back(tls_path_buffer.data() + start_idx);
-		for (size_t i = start_idx; i < tls_path_buffer.size(); ++i)
+		tls_path_ptrs[idx++] = path;
+		for (char* p = path; *p; ++p)
 		{
-			if (tls_path_buffer[i] == delimiter)
+			if (*p == delimiter)
 			{
-				tls_path_buffer[i] = '\0';
-				tls_path_ptrs.push_back(&tls_path_buffer[i + 1]);
+				*p = '\0'; // Mutamos el string directamente en el stack
+				if (idx < 31)
+				{
+					tls_path_ptrs[idx++] = p + 1;
+				}
 			}
 		}
-		tls_path_ptrs.push_back(nullptr);
-		return tls_path_ptrs.data();
+		tls_path_ptrs[idx] = nullptr;
+		return tls_path_ptrs;
 	}
 
 	enum class DBResult
@@ -221,10 +221,10 @@ namespace maxora
 		MaxmindStore::SetLastError("");
 		if (params[0] < 1 * sizeof(cell))
 			return 0;
-		std::string filename;
-		if (!GetAmxString(amx, params[1], filename))
+		char filename[256];
+		if (!GetAmxString(amx, params[1], filename, sizeof(filename)))
 			return 0;
-		return MaxmindStore::LoadDB(filename.c_str()) ? 1 : 0;
+		return MaxmindStore::LoadDB(filename) ? 1 : 0;
 	}
 
 	cell AMX_NATIVE_CALL n_MMDB_Unload(AMX* amx, const cell* params)
@@ -262,8 +262,9 @@ namespace maxora
 		MaxmindStore::SetLastError("");
 		if (params[0] < 4 * sizeof(cell))
 			return 0;
-		std::string ip, path;
-		if (!GetAmxString(amx, params[1], ip) || !GetAmxString(amx, params[2], path))
+		char ip[64];
+		char path[128];
+		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) || !GetAmxString(amx, params[2], path, sizeof(path)))
 			return 0;
 
 		int size = params[4];
@@ -271,7 +272,7 @@ namespace maxora
 			return 0;
 
 		MMDB_entry_data_s entry;
-		if (!EnsureDBSuccess(GetValueFromDB(ip.c_str(), PreparePath(path), &entry)))
+		if (!EnsureDBSuccess(GetValueFromDB(ip, PreparePath(path), &entry)))
 			return 0;
 
 		if (entry.type != MMDB_DATA_TYPE_UTF8_STRING)
@@ -294,12 +295,13 @@ namespace maxora
 		MaxmindStore::SetLastError("");
 		if (params[0] < 3 * sizeof(cell))
 			return 0;
-		std::string ip, path;
-		if (!GetAmxString(amx, params[1], ip) || !GetAmxString(amx, params[2], path))
+		char ip[64];
+		char path[128];
+		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) || !GetAmxString(amx, params[2], path, sizeof(path)))
 			return 0;
 
 		MMDB_entry_data_s entry;
-		if (!EnsureDBSuccess(GetValueFromDB(ip.c_str(), PreparePath(path), &entry)))
+		if (!EnsureDBSuccess(GetValueFromDB(ip, PreparePath(path), &entry)))
 			return 0;
 
 		cell result;
@@ -345,12 +347,13 @@ namespace maxora
 		MaxmindStore::SetLastError("");
 		if (params[0] < 3 * sizeof(cell))
 			return 0;
-		std::string ip, path;
-		if (!GetAmxString(amx, params[1], ip) || !GetAmxString(amx, params[2], path))
+		char ip[64];
+		char path[128];
+		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) || !GetAmxString(amx, params[2], path, sizeof(path)))
 			return 0;
 
 		MMDB_entry_data_s entry;
-		if (!EnsureDBSuccess(GetValueFromDB(ip.c_str(), PreparePath(path), &entry)))
+		if (!EnsureDBSuccess(GetValueFromDB(ip, PreparePath(path), &entry)))
 			return 0;
 
 		float val = 0.0f;
@@ -377,12 +380,13 @@ namespace maxora
 		MaxmindStore::SetLastError("");
 		if (params[0] < 3 * sizeof(cell))
 			return 0;
-		std::string ip, path;
-		if (!GetAmxString(amx, params[1], ip) || !GetAmxString(amx, params[2], path))
+		char ip[64];
+		char path[128];
+		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) || !GetAmxString(amx, params[2], path, sizeof(path)))
 			return 0;
 
 		MMDB_entry_data_s entry;
-		if (!EnsureDBSuccess(GetValueFromDB(ip.c_str(), PreparePath(path), &entry)))
+		if (!EnsureDBSuccess(GetValueFromDB(ip, PreparePath(path), &entry)))
 			return 0;
 
 		if (entry.type != MMDB_DATA_TYPE_BOOLEAN)
@@ -404,12 +408,13 @@ namespace maxora
 		MaxmindStore::SetLastError("");
 		if (params[0] < 3 * sizeof(cell))
 			return 0;
-		std::string ip, path;
-		if (!GetAmxString(amx, params[1], ip) || !GetAmxString(amx, params[2], path))
+		char ip[64];
+		char path[128];
+		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) || !GetAmxString(amx, params[2], path, sizeof(path)))
 			return 0;
 
 		MMDB_entry_data_s entry;
-		DBResult res = GetValueFromDB(ip.c_str(), PreparePath(path), &entry);
+		DBResult res = GetValueFromDB(ip, PreparePath(path), &entry);
 
 		if (res == DBResult::Error)
 		{
@@ -431,8 +436,8 @@ namespace maxora
 		MaxmindStore::SetLastError("");
 		if (params[0] < 2 * sizeof(cell))
 			return 0;
-		std::string ip;
-		if (!GetAmxString(amx, params[1], ip))
+		char ip[64];
+		if (!GetAmxString(amx, params[1], ip, sizeof(ip)))
 			return 0;
 
 		if (!MaxmindStore::IsLoaded())
@@ -442,7 +447,7 @@ namespace maxora
 		}
 		int gai_err, mmdb_err;
 		MMDB_lookup_result_s result =
-			MMDB_lookup_string(MaxmindStore::GetDB(), ip.c_str(), &gai_err, &mmdb_err);
+			MMDB_lookup_string(MaxmindStore::GetDB(), ip, &gai_err, &mmdb_err);
 
 		if (gai_err != 0)
 		{
