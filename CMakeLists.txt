@@ -15,6 +15,8 @@ add_library(maxora SHARED
     src/natives.cpp
 )
 
+set_target_properties(maxora PROPERTIES PREFIX "")
+
 # Application Includes
 target_include_directories(maxora PRIVATE
     src

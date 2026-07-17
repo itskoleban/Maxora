@@ -22,8 +22,8 @@ jobs:
           - os: ubuntu-latest
             # Force 32-bit compilation on Linux via GCC flags
             cmake_args: -DCMAKE_C_FLAGS=-m32 -DCMAKE_CXX_FLAGS=-m32
-            artifact_name: libmaxora.so
-            output_path: build/libmaxora.so
+            artifact_name: maxora.so
+            output_path: build/maxora.so
 
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +68,7 @@ jobs:
       - name: Download Linux Artifact
         uses: actions/download-artifact@v4
         with:
-          name: libmaxora.so
+          name: maxora.so
           path: out
 
       - name: Publish Release
@@ -76,6 +76,6 @@ jobs:
         with:
           files: |
             out/maxora.dll
-            out/libmaxora.so
+            out/maxora.so
             include/maxora.inc
           generate_release_notes: true

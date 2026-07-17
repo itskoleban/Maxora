@@ -45,15 +45,16 @@ Maxora is built strictly against the modern `IComponent` interface of the open.m
 
 ## Installation
 
-1. Download the latest compiled binaries (`maxora.dll` for Windows or `libmaxora.so` for Linux) from the [Releases page](https://github.com/itskoleban/Maxora/releases/latest).
+1. Download the latest compiled binaries (`maxora.dll` for Windows or `maxora.so` for Linux) from the [Releases page](https://github.com/itskoleban/Maxora/releases/latest).
 2. Place the binary in your open.mp `components` directory.
 3. Add `maxora` to the `components` section of your `config.json`.
 4. Download a `.mmdb` database (e.g., [GeoLite2 Free Geolocation Data](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data)) and place it in the server's root directory.
 5. Move `include/maxora.inc` to your `pawno/include` folder.
 6. Include the library in your script:
-   ```pawn
-   #include <maxora>
-   ```
+
+```pawn
+#include <maxora>
+```
 
 ## Usage
 
@@ -63,13 +64,18 @@ All configurations are handled programmatically through the Pawn API via `MMDB_L
 #include <open.mp>
 #include <maxora>
 
+main() {
+	print("Maxora example script loaded.");
+}
+
 public OnGameModeInit() {
 	// The path resolves from your server's root directory.
 	// You can place it anywhere, for example inside scriptfiles:
-	if (MMDB_Load("scriptfiles/GeoLite2-City.mmdb")) {
+	if (MMDB_Load("scriptfiles/GeoLite2-Country.mmdb")) {
 		print("[MMDB] Database loaded successfully.");
 	} else {
 		new err[128];
+
 		MMDB_GetLastError(err, sizeof(err));
 		printf("[MMDB] Failed to load database. Reason: %s", err);
 	}
@@ -87,8 +93,14 @@ public OnPlayerConnect(playerid) {
 		printf("[MMDB] Player %d connected | IP: %s | Country: %s", playerid, ip, country);
 	} else {
 		new err[128];
+
 		MMDB_GetLastError(err, sizeof(err));
-		printf("[MMDB] Player %d connected | IP: %s | Country: Unknown (Reason: %s)", playerid, ip, err);
+		printf(
+			"[MMDB] Player %d connected | IP: %s | Country: Unknown (Reason: %s)",
+			playerid,
+			ip,
+			err
+		);
 	}
 
 	return 1;
@@ -148,17 +160,22 @@ Known internal errors:
 ## Development & Testing
 
 1. Clone the repository recursively to fetch submodules:
-   ```bash
-   git clone --recursive https://github.com/itskoleban/Maxora.git
-   ```
+
+```bash
+git clone --recursive https://github.com/itskoleban/Maxora.git
+```
+
 2. Configure CMake:
-   ```bash
-   cmake -S . -B build -A Win32 -DCMAKE_BUILD_TYPE=Release
-   ```
+
+```bash
+cmake -S . -B build -A Win32 -DCMAKE_BUILD_TYPE=Release
+```
+
 3. Build the component:
-   ```bash
-   cmake --build build --config Release
-   ```
+
+```bash
+cmake --build build --config Release
+```
 
 ### Running Backend Tests
 
@@ -171,7 +188,7 @@ The project includes a standalone C++ test target named `maxora_test` to verify 
 
 - **CI/CD**: Managed via GitHub Actions (`.github/workflows/release.yml`).
 - Triggers on pushed version tags (`v*`).
-- Compiles standard 32-bit `maxora.dll` for Windows and `libmaxora.so` for Linux, utilizing GCC `-m32` cross-compilation on Ubuntu.
+- Compiles standard 32-bit `maxora.dll` for Windows and `maxora.so` for Linux, utilizing GCC `-m32` cross-compilation on Ubuntu.
 - Automatically creates a GitHub Release containing both artifacts.
 
 ---
