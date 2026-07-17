@@ -157,7 +157,10 @@ MaxMind offers both free and paid database families. The functions you can succe
 | **GeoLite2-Country** | `GetCountryCode`, `GetCountryName`                | Will return `false` if you attempt to use `GetCityName`.               |
 | **GeoLite2-ASN**     | `GetASN`, `GetISP`                                | Contains routing data. Does **not** contain any country or city data.  |
 
-_(Note: Maxora is compatible with both the free GeoLite2 and the paid GeoIP database families, though it has only been officially tested with GeoLite2. Functions such as `MMDB_GetNetmask` and generic path-based lookups like `MMDB_GetString` work on any database that actually contains the requested field path)._
+> [!IMPORTANT]
+> This plugin has only been developed and tested using the free **GeoLite2** database family. It may work with paid variants like GeoIP2, but such usage remains completely untested.
+
+_(Note: Functions such as `MMDB_GetNetmask` and generic path-based lookups like `MMDB_GetString` work universally on any database that actually contains the requested field path)._
 
 ## Error Handling / Troubleshooting
 
