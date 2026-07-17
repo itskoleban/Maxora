@@ -147,6 +147,18 @@ These wrappers are provided in `maxora.inc`. They only compile into your script 
 
 `MMDB_LANG_ENGLISH` ("en"), `MMDB_LANG_SPANISH` ("es"), `MMDB_LANG_GERMAN` ("de"), `MMDB_LANG_FRENCH` ("fr"), `MMDB_LANG_JAPANESE` ("ja"), `MMDB_LANG_PORTUGUESE` ("pt-BR"), `MMDB_LANG_RUSSIAN` ("ru"), `MMDB_LANG_CHINESE` ("zh-CN").
 
+### Database Compatibility
+
+MaxMind offers both free and paid database families. The functions you can successfully call depend on the database you loaded:
+
+| Database Type        | Supported Helpers                                 | Notes                                                                  |
+| -------------------- | ------------------------------------------------- | ---------------------------------------------------------------------- |
+| **GeoLite2-City**    | `GetCountryCode`, `GetCountryName`, `GetCityName` | The most complete geolocation DB. Includes both country and city data. |
+| **GeoLite2-Country** | `GetCountryCode`, `GetCountryName`                | Will return `false` if you attempt to use `GetCityName`.               |
+| **GeoLite2-ASN**     | `GetASN`, `GetISP`                                | Contains routing data. Does **not** contain any country or city data.  |
+
+_(Note: Maxora is compatible with both the free GeoLite2 and the paid GeoIP2 database families. Functions such as `MMDB_GetNetmask` and generic path-based lookups like `MMDB_GetString` work on any database that actually contains the requested field path)._
+
 ## Error Handling / Troubleshooting
 
 Maxora safely catches internal exceptions and exposes them via `MMDB_GetLastError`.
