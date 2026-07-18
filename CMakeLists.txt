@@ -15,7 +15,7 @@ add_library(maxora SHARED
     src/natives.cpp
 )
 
-set_target_properties(maxora PROPERTIES PREFIX "")
+set_target_properties(maxora PROPERTIES PREFIX "" OUTPUT_NAME "Maxora")
 
 # Application Includes
 target_include_directories(maxora PRIVATE

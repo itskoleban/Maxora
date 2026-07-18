@@ -45,9 +45,9 @@ Maxora is built strictly against the modern `IComponent` interface of the open.m
 
 ## Installation
 
-1. Download the latest compiled binaries (`maxora.dll` for Windows or `maxora.so` for Linux) from the [Releases page](https://github.com/itskoleban/Maxora/releases/latest).
+1. Download the latest compiled binaries (`Maxora.dll` for Windows or `Maxora.so` for Linux) from the [Releases page](https://github.com/itskoleban/Maxora/releases/latest).
 2. Place the binary in your open.mp `components` directory.
-3. Add `maxora` to the `components` section of your `config.json`.
+3. Add `Maxora` to the `components` section of your `config.json`.
 4. Download a `.mmdb` database (e.g., [GeoLite2 Free Geolocation Data](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data)) and place it in the server's root directory.
 5. Move `include/maxora.inc` to your `pawno/include` folder.
 6. Include the library in your script:
@@ -203,7 +203,7 @@ The project includes a standalone C++ test target named `maxora_test` to verify 
 
 - **CI/CD**: Managed via GitHub Actions (`.github/workflows/release.yml`).
 - Triggers on pushed version tags (`v*`).
-- Compiles standard 32-bit `maxora.dll` for Windows and `maxora.so` for Linux, utilizing GCC `-m32` cross-compilation on Ubuntu.
+- Compiles standard 32-bit `Maxora.dll` for Windows and `Maxora.so` for Linux, utilizing GCC `-m32` cross-compilation on Ubuntu.
 - Automatically creates a GitHub Release containing both artifacts.
 
 ---

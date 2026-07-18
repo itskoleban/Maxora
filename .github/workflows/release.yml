@@ -17,13 +17,13 @@ jobs:
         include:
           - os: windows-latest
             cmake_args: -A Win32
-            artifact_name: maxora.dll
-            output_path: build/Release/maxora.dll
+            artifact_name: Maxora.dll
+            output_path: build/Release/Maxora.dll
           - os: ubuntu-latest
             # Force 32-bit compilation on Linux via GCC flags
             cmake_args: -DCMAKE_C_FLAGS=-m32 -DCMAKE_CXX_FLAGS=-m32
-            artifact_name: maxora.so
-            output_path: build/maxora.so
+            artifact_name: Maxora.so
+            output_path: build/Maxora.so
 
     steps:
       - uses: actions/checkout@v4
@@ -62,20 +62,20 @@ jobs:
       - name: Download Windows Artifact
         uses: actions/download-artifact@v4
         with:
-          name: maxora.dll
+          name: Maxora.dll
           path: out
 
       - name: Download Linux Artifact
         uses: actions/download-artifact@v4
         with:
-          name: maxora.so
+          name: Maxora.so
           path: out
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            out/maxora.dll
-            out/maxora.so
+            out/Maxora.dll
+            out/Maxora.so
             include/maxora.inc
           generate_release_notes: true
