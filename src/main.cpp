@@ -61,7 +61,7 @@ class MaxoraComponent final : public IComponent, public PawnEventHandler
 	 */
 	SemanticVersion componentVersion() const override
 	{
-		return {1, 1, 0, 0};
+		return {1, 1, 1, 0};
 	}
 
 	/**

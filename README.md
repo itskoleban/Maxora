@@ -168,7 +168,7 @@ MaxMind offers both free and paid database families. The functions you can succe
 | Database Type        | Supported Helpers                                          | Notes                                                                 |
 | -------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------- |
 | **GeoLite2-City**    | `GetCountryCode/Name`, `GetRegionCode/Name`, `GetCityName` | The most complete geolocation DB. Includes country, region, and city. |
-| **GeoLite2-Country** | `GetCountryCode/Name`                                      | Will return `false` for city and region queries.                      |
+| **GeoLite2-Country** | `GetCountryCode/Name`                                      | Will return `MMDB_NOT_FOUND` for city and region queries.                      |
 | **GeoLite2-ASN**     | `GetASN`, `GetISP`                                         | Contains routing data. Does **not** contain any country or city data. |
 
 > [!IMPORTANT]

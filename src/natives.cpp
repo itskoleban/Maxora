@@ -482,7 +482,7 @@ namespace maxora
 	}
 
 	/**
-	 * @brief native MMDB_GetFloat(const ip[], const path[], &Float:dest);
+	 * @brief native MMDB_GetFloat(MMDB:handle, const ip[], const path[], &Float:dest);
 	 * Retrieves a float or double from the database, casting it to a 32-bit Pawn float.
 	 */
 	cell AMX_NATIVE_CALL n_MMDB_GetFloat(AMX* amx, const cell* params)
@@ -528,7 +528,7 @@ namespace maxora
 	}
 
 	/**
-	 * @brief native MMDB_GetBool(const ip[], const path[], &bool:dest);
+	 * @brief native MMDB_GetBool(MMDB:handle, const ip[], const path[], &bool:dest);
 	 * Retrieves a boolean value from the database.
 	 */
 	cell AMX_NATIVE_CALL n_MMDB_GetBool(AMX* amx, const cell* params)
@@ -569,7 +569,7 @@ namespace maxora
 	}
 
 	/**
-	 * @brief native MMDB_HasField(const ip[], const path[], &bool:exists);
+	 * @brief native MMDB_HasField(MMDB:handle, const ip[], const path[], &bool:exists);
 	 * Checks if a specific path exists within the IP's data structure without extracting it.
 	 */
 	cell AMX_NATIVE_CALL n_MMDB_HasField(AMX* amx, const cell* params)
@@ -605,7 +605,7 @@ namespace maxora
 	}
 
 	/**
-	 * @brief native MMDB_GetNetmask(const ip[], &dest);
+	 * @brief native MMDB_GetNetmask(MMDB:handle, const ip[], &dest);
 	 * Retrieves the routing prefix (netmask) associated with the IP.
 	 */
 	cell AMX_NATIVE_CALL n_MMDB_GetNetmask(AMX* amx, const cell* params)
@@ -628,7 +628,7 @@ namespace maxora
 		if (!db)
 		{
 			MaxmindStore::SetLastError("Invalid database handle.");
-			return 0;
+			return static_cast<cell>(DBResult::InvalidHandle);
 		}
 		int gai_err, mmdb_err;
 		MMDB_lookup_result_s result = MMDB_lookup_string(db, ip, &gai_err, &mmdb_err);
@@ -636,17 +636,17 @@ namespace maxora
 		if (gai_err != 0)
 		{
 			MaxmindStore::SetLastError(gai_strerror(gai_err));
-			return 0;
+			return static_cast<cell>(DBResult::Error);
 		}
 		if (mmdb_err != 0)
 		{
 			MaxmindStore::SetLastError(MMDB_strerror(mmdb_err));
-			return 0;
+			return static_cast<cell>(DBResult::Error);
 		}
 		if (!result.found_entry)
 		{
 			MaxmindStore::SetLastError("IP not found.");
-			return 0;
+			return static_cast<cell>(DBResult::NotFound);
 		}
 
 		if (!SetAmxCell(amx, params[3], result.netmask))
