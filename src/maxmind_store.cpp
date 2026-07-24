@@ -3,16 +3,17 @@
  * @brief Implementation of the MaxMind storage engine
  */
 
+#include <unordered_map>
 #include "maxmind_store.hpp"
 
 namespace maxora
 {
 	// Initialize static member variables
-	MMDB_s MaxmindStore::mmdb_;
-	bool MaxmindStore::isLoaded_ = false;
+	std::unordered_map<int, MMDB_s> MaxmindStore::databases_;
+	int MaxmindStore::nextHandle_ = 1;
 	std::string MaxmindStore::lastError_;
 
-	bool MaxmindStore::LoadDB(const char* filename)
+	int MaxmindStore::LoadDB(const char* filename)
 	{
 		MMDB_s temp_mmdb;
 
@@ -25,41 +26,55 @@ namespace maxora
 		{
 			// If opening fails, store the libmaxminddb error message and abort.
 			lastError_ = MMDB_strerror(status);
-			return false;
+			return 0; // Return invalid handle
 		}
 
-		// If a database was already loaded previously, we must close it before overwriting
-		// the global struct to prevent memory leaks and file descriptor leaks.
-		if (isLoaded_)
-		{
-			MMDB_close(&mmdb_);
-		}
-
-		// Assign the new database to the global state and clear any previous errors.
-		mmdb_ = temp_mmdb;
-		isLoaded_ = true;
+		// Assign a unique handle to the new database and store it.
+		int handle = nextHandle_++;
+		databases_[handle] = temp_mmdb;
 		lastError_.clear();
-		return true;
+		return handle;
 	}
 
-	void MaxmindStore::UnloadDB()
+	void MaxmindStore::UnloadDB(int handle)
 	{
-		// Only attempt to close if a database is currently loaded to avoid double-freeing.
-		if (isLoaded_)
+		auto it = databases_.find(handle);
+		if (it != databases_.end())
 		{
-			MMDB_close(&mmdb_);
-			isLoaded_ = false;
+			MMDB_close(&it->second);
+			databases_.erase(it);
+		}
+
+		if (databases_.empty())
+		{
+			nextHandle_ = 1;
 		}
 	}
 
-	bool MaxmindStore::IsLoaded()
+	void MaxmindStore::UnloadAll()
 	{
-		return isLoaded_;
+		for (auto& pair : databases_)
+		{
+			MMDB_close(&pair.second);
+		}
+		databases_.clear();
+		nextHandle_ = 1;
+		lastError_.clear();
 	}
 
-	MMDB_s* MaxmindStore::GetDB()
+	bool MaxmindStore::IsLoaded(int handle)
 	{
-		return &mmdb_;
+		return databases_.find(handle) != databases_.end();
+	}
+
+	MMDB_s* MaxmindStore::GetDB(int handle)
+	{
+		auto it = databases_.find(handle);
+		if (it != databases_.end())
+		{
+			return &it->second;
+		}
+		return nullptr;
 	}
 
 	const std::string& MaxmindStore::GetLastError()

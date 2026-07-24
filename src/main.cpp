@@ -61,7 +61,7 @@ class MaxoraComponent final : public IComponent, public PawnEventHandler
 	 */
 	SemanticVersion componentVersion() const override
 	{
-		return {1, 0, 0, 0};
+		return {1, 1, 0, 0};
 	}
 
 	/**
@@ -122,7 +122,7 @@ class MaxoraComponent final : public IComponent, public PawnEventHandler
 		// or file locks.
 		if (initialized_)
 		{
-			maxora::MaxmindStore::UnloadDB();
+			maxora::MaxmindStore::UnloadAll();
 		}
 	}
 
@@ -171,7 +171,7 @@ class MaxoraComponent final : public IComponent, public PawnEventHandler
 		}
 
 		gPawnComponent = nullptr;
-		maxora::MaxmindStore::UnloadDB(); // Force unload DB to free memory.
+		maxora::MaxmindStore::UnloadAll(); // Force unload DB to free memory.
 		initialized_ = false;
 	}
 };

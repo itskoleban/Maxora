@@ -3,7 +3,7 @@
 [![Release](https://img.shields.io/github/v/release/itskoleban/Maxora?style=flat-square)](https://github.com/itskoleban/Maxora/releases/latest)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/itskoleban/Maxora/release.yml?style=flat-square)](https://github.com/itskoleban/Maxora/actions)
 
-Maxora is a highly optimized, zero-allocation [open.mp](https://open.mp/) component for querying [MaxMind DB (`.mmdb`)](https://maxmind.github.io/MaxMind-DB/) databases directly from Pawn scripts.
+Maxora is a highly optimized [open.mp](https://open.mp/) component for querying [MaxMind DB (`.mmdb`)](https://maxmind.github.io/MaxMind-DB/) databases directly from Pawn scripts.
 
 It provides instant IP geolocation lookups (such as Country, City, ASN, and ISP) for high-concurrency open.mp servers without introducing latency or garbage collection overhead to the main server thread.
 
@@ -23,18 +23,18 @@ It provides instant IP geolocation lookups (such as Country, City, ASN, and ISP)
 ## Features
 
 - **High Performance (Memory-Mapped I/O)**: Uses `MMDB_MODE_MMAP` for instant `O(depth)` lookups directly from the OS disk cache.
-- **Zero Heap Allocations**: Executes hot paths (reading from AMX, preparing paths, and querying the database) entirely on the C++ stack using fixed-size buffers and `thread_local` memory arrays. Performs 0 dynamic heap allocations per query.
+- **Optimized Memory Usage**: Executes hot paths (reading from AMX, preparing paths, and querying the database) largely on the C++ stack using fixed-size buffers and `thread_local` memory arrays to minimize dynamic heap allocations per query.
 - **Memory Safety Guarantee**: Utilizes open.mp's native `StringView` and strict bounds checking to prevent buffer overflows during AMX virtual machine interaction.
-- **Atomic Hot-Swapping**: Reloads the `.mmdb` database safely at runtime. Invalid or corrupted databases are rejected gracefully while preserving the existing database instance.
+- **Safe Hot-Swapping**: You can load new `.mmdb` databases safely at runtime via Handles. Invalid or corrupted databases are rejected gracefully.
 - **Dynamic Path Navigation**: Natively queries any arbitrary depth hierarchy (e.g., `"country.names.en"`) in the DB tree. Supports up to 127 path segments. Custom delimiter `/` is supported.
 
 ## Architecture / Design Overview
 
 Maxora is built strictly against the modern `IComponent` interface of the open.mp SDK.
 
-- **Pawn Natives**: Bridges the Pawn AMX machine and the C++ backend (`src/natives.cpp`). Extracts arguments using pointer references and limits to prevent null-termination vulnerabilities.
-- **Backend Engine**: Wraps the standard C API of `libmaxminddb` with C++ thread-local storage (`src/maxmind_store.cpp`). It manages the lifecycle of the `MMDB_s` context to provide atomic reads and safe swapping.
-- **Zero-Allocation Parser**: The internal `PreparePath` function mutates the path string in-place on the stack, constructing a node-pointer array without relying on heap construction.
+- **Pawn Natives**: Bridges the Pawn AMX machine and the C++ backend (`src/natives.cpp`). Extracts arguments using pointer references to prevent null-termination vulnerabilities, and utilizes `thread_local` arrays for efficient path parsing.
+- **Backend Engine**: Wraps the standard C API of `libmaxminddb` (`src/maxmind_store.cpp`). It manages the lifecycle of `MMDB_s` contexts using a handle-based architecture, allowing multiple databases to be loaded and queried simultaneously.
+- **In-Place Parser**: The internal `PreparePath` function mutates the path string in-place on the stack, constructing a node-pointer array efficiently without relying on heavy heap construction.
 
 ## Requirements
 
@@ -64,18 +64,21 @@ All configurations are handled programmatically through the Pawn API via `MMDB_L
 #include <open.mp>
 #include <maxora>
 
+new MMDB:CityDB;
+
 main() {
 	print("Maxora example script loaded.");
 }
 
 public OnGameModeInit() {
 	// The path resolves from your server's root directory.
-	// You can place it anywhere, for example inside scriptfiles:
-	if (MMDB_Load("scriptfiles/GeoLite2-Country.mmdb")) {
+	// You can load multiple databases by assigning them to different variables.
+	CityDB = MMDB_Load("scriptfiles/GeoLite2-Country.mmdb");
+
+	if (CityDB) {
 		print("[MMDB] Database loaded successfully.");
 	} else {
 		new err[128];
-
 		MMDB_GetLastError(err, sizeof(err));
 		printf("[MMDB] Failed to load database. Reason: %s", err);
 	}
@@ -89,11 +92,10 @@ public OnPlayerConnect(playerid) {
 	GetPlayerIp(playerid, ip, sizeof(ip));
 
 	// Querying a localized English country name using stock helpers
-	if (MMDB_GetCountryName(ip, country, sizeof(country), MMDB_LANG_ENGLISH)) {
+	if (MMDB_GetCountryName(CityDB, ip, country, sizeof(country), MMDB_LANG_ENGLISH)) {
 		printf("[MMDB] Player %d connected | IP: %s | Country: %s", playerid, ip, country);
 	} else {
 		new err[128];
-
 		MMDB_GetLastError(err, sizeof(err));
 		printf(
 			"[MMDB] Player %d connected | IP: %s | Country: Unknown (Reason: %s)",
@@ -115,33 +117,35 @@ All data extraction natives return a boolean indicating success or failure. Data
 
 | Native                                 | Description                                                          |
 | -------------------------------------- | -------------------------------------------------------------------- |
-| `bool:MMDB_Load(const filename[])`     | Loads an `.mmdb` file into memory. Returns `true` on success.        |
-| `MMDB_Unload()`                        | Safely unloads the database and frees OS file descriptors.           |
-| `bool:MMDB_IsLoaded()`                 | Returns `true` if a database is actively mapped in memory.           |
+| `MMDB:MMDB_Load(const filename[])`     | Loads an `.mmdb` file into memory. Returns a handle on success.      |
+| `MMDB_Unload(MMDB:handle)`             | Safely unloads the database and frees OS file descriptors.           |
+| `bool:MMDB_IsLoaded(MMDB:handle)`      | Returns `true` if a database is actively mapped in memory.           |
 | `bool:MMDB_GetLastError(dest[], size)` | Extracts the last internal error message generated by the component. |
 
 ### Data Extraction Natives
 
-| Native                                                        | Description                                                          |
-| ------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `bool:MMDB_GetString(const ip[], const path[], dest[], size)` | Extracts a UTF-8 string from the given JSON-like path.               |
-| `bool:MMDB_GetInt(const ip[], const path[], &dest)`           | Extracts a 16, 32, or 64-bit integer (safe against cell bounds).     |
-| `bool:MMDB_GetFloat(const ip[], const path[], &Float:dest)`   | Extracts a single or double-precision float.                         |
-| `bool:MMDB_GetBool(const ip[], const path[], &bool:dest)`     | Extracts a boolean state.                                            |
-| `bool:MMDB_HasField(const ip[], const path[], &bool:exists)`  | Checks if a path exists within the IP's block without extracting it. |
-| `bool:MMDB_GetNetmask(const ip[], &dest)`                     | Retrieves the IPv4/IPv6 routing prefix (netmask) for the given IP.   |
+| Native                                                                     | Description                                                          |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `bool:MMDB_GetString(MMDB:handle, const ip[], const path[], dest[], size)` | Extracts a UTF-8 string from the given JSON-like path.               |
+| `bool:MMDB_GetInt(MMDB:handle, const ip[], const path[], &dest)`           | Extracts a 16, 32, or 64-bit integer (safe against cell bounds).     |
+| `bool:MMDB_GetFloat(MMDB:handle, const ip[], const path[], &Float:dest)`   | Extracts a single or double-precision float.                         |
+| `bool:MMDB_GetBool(MMDB:handle, const ip[], const path[], &bool:dest)`     | Extracts a boolean state.                                            |
+| `bool:MMDB_HasField(MMDB:handle, const ip[], const path[], &bool:exists)`  | Checks if a path exists within the IP's block without extracting it. |
+| `bool:MMDB_GetNetmask(MMDB:handle, const ip[], &dest)`                     | Retrieves the IPv4/IPv6 routing prefix (netmask) for the given IP.   |
 
 ### Helper Functions (Stocks)
 
 These wrappers are provided in `maxora.inc`. They only compile into your script if utilized.
 
-| Stock Helper                                                 | Description                                           |
-| ------------------------------------------------------------ | ----------------------------------------------------- |
-| `bool:MMDB_GetCountryCode(const ip[], dest[], size)`         | Retrieves the ISO 2-letter country code (e.g., "US"). |
-| `bool:MMDB_GetCountryName(const ip[], dest[], size, lang[])` | Retrieves the localized country name.                 |
-| `bool:MMDB_GetCityName(const ip[], dest[], size, lang[])`    | Retrieves the localized city name.                    |
-| `bool:MMDB_GetASN(const ip[], &dest)`                        | Retrieves the Autonomous System Number.               |
-| `bool:MMDB_GetISP(const ip[], dest[], size)`                 | Retrieves the Internet Service Provider name.         |
+| Stock Helper                                                              | Description                                           |
+| ------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `bool:MMDB_GetCountryCode(MMDB:handle, const ip[], dest[], size)`         | Retrieves the ISO 2-letter country code (e.g., "US"). |
+| `bool:MMDB_GetCountryName(MMDB:handle, const ip[], dest[], size, lang[])` | Retrieves the localized country name.                 |
+| `bool:MMDB_GetRegionCode(MMDB:handle, const ip[], dest[], size)`          | Retrieves the region/state ISO code (e.g., "CA").     |
+| `bool:MMDB_GetRegionName(MMDB:handle, const ip[], dest[], size, lang[])`  | Retrieves the localized region/state name.            |
+| `bool:MMDB_GetCityName(MMDB:handle, const ip[], dest[], size, lang[])`    | Retrieves the localized city name.                    |
+| `bool:MMDB_GetASN(MMDB:handle, const ip[], &dest)`                        | Retrieves the Autonomous System Number.               |
+| `bool:MMDB_GetISP(MMDB:handle, const ip[], dest[], size)`                 | Retrieves the Internet Service Provider name.         |
 
 #### Language Constants
 
@@ -151,11 +155,11 @@ These wrappers are provided in `maxora.inc`. They only compile into your script 
 
 MaxMind offers both free and paid database families. The functions you can successfully call depend on the database you loaded:
 
-| Database Type        | Supported Helpers                                 | Notes                                                                  |
-| -------------------- | ------------------------------------------------- | ---------------------------------------------------------------------- |
-| **GeoLite2-City**    | `GetCountryCode`, `GetCountryName`, `GetCityName` | The most complete geolocation DB. Includes both country and city data. |
-| **GeoLite2-Country** | `GetCountryCode`, `GetCountryName`                | Will return `false` if you attempt to use `GetCityName`.               |
-| **GeoLite2-ASN**     | `GetASN`, `GetISP`                                | Contains routing data. Does **not** contain any country or city data.  |
+| Database Type        | Supported Helpers                                          | Notes                                                                 |
+| -------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------- |
+| **GeoLite2-City**    | `GetCountryCode/Name`, `GetRegionCode/Name`, `GetCityName` | The most complete geolocation DB. Includes country, region, and city. |
+| **GeoLite2-Country** | `GetCountryCode/Name`                                      | Will return `false` for city and region queries.                      |
+| **GeoLite2-ASN**     | `GetASN`, `GetISP`                                         | Contains routing data. Does **not** contain any country or city data. |
 
 > [!IMPORTANT]
 > This plugin has only been developed and tested using the free **GeoLite2** database family. It may work with paid variants like GeoIP2, but such usage remains completely untested.

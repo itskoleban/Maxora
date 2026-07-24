@@ -12,6 +12,12 @@
 #include <vector>
 #include <maxminddb.h>
 
+#ifdef _WIN32
+#include <Ws2tcpip.h>
+#else
+#include <netdb.h>
+#endif
+
 /**
  * @brief Parses a path string into a libmaxminddb pointer array.
  * 
@@ -69,10 +75,12 @@ int main()
     // 3. Handle lookup errors
     if (gai_err != 0) {
         std::cerr << "Error looking up IP: " << gai_strerror(gai_err) << "\n";
+        MMDB_close(&mmdb);
         return 1;
     }
     if (mmdb_err != 0) {
         std::cerr << "MMDB Error: " << MMDB_strerror(mmdb_err) << "\n";
+        MMDB_close(&mmdb);
         return 1;
     }
 

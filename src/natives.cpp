@@ -11,6 +11,12 @@
 #include <vector>
 #include <limits>
 
+#ifdef _WIN32
+#include <Ws2tcpip.h>
+#else
+#include <netdb.h>
+#endif
+
 extern IPawnComponent* gPawnComponent;
 
 namespace maxora
@@ -97,6 +103,12 @@ namespace maxora
 			return false;
 		}
 
+		if (max_size <= 0)
+		{
+			MaxmindStore::SetLastError("Invalid size parameter.");
+			return false;
+		}
+
 		int len = static_cast<int>(data_size);
 		if (len >= max_size)
 		{
@@ -152,7 +164,7 @@ namespace maxora
 	 * @brief Parses a dot-separated (or slash-separated) path string into an array of pointers.
 	 *
 	 * This function modifies the input `path` buffer in-place by replacing delimiters with null
-	 * terminators (`\0`), achieving zero-allocation parsing.
+	 * terminators (`\0`), achieving highly efficient in-place parsing.
 	 *
 	 * @param path The mutable path string (e.g., "country.names.en" becomes
 	 * "country\0names\0en\0").
@@ -209,7 +221,7 @@ namespace maxora
 	 * @param entry_data Pointer to the libmaxminddb struct that will hold the result data.
 	 * @return A DBResult indicating the precise outcome of the query.
 	 */
-	static DBResult GetValueFromDB(const char* ip, const char* const* path_ptrs,
+	static DBResult GetValueFromDB(int handle, const char* ip, const char* const* path_ptrs,
 								   MMDB_entry_data_s* entry_data)
 	{
 		if (!path_ptrs)
@@ -218,15 +230,15 @@ namespace maxora
 			return DBResult::Error;
 		}
 
-		if (!MaxmindStore::IsLoaded())
+		MMDB_s* db = MaxmindStore::GetDB(handle);
+		if (!db)
 		{
-			MaxmindStore::SetLastError("Database not loaded.");
+			MaxmindStore::SetLastError("Invalid database handle.");
 			return DBResult::Error;
 		}
 
 		int gai_err, mmdb_err;
-		MMDB_lookup_result_s result =
-			MMDB_lookup_string(MaxmindStore::GetDB(), ip, &gai_err, &mmdb_err);
+		MMDB_lookup_result_s result = MMDB_lookup_string(db, ip, &gai_err, &mmdb_err);
 
 		if (gai_err != 0)
 		{
@@ -298,14 +310,17 @@ namespace maxora
 	{
 		MaxmindStore::SetLastError("");
 		if (params[0] < 1 * sizeof(cell))
+		{
+			MaxmindStore::SetLastError("Invalid number of parameters.");
 			return 0;
+		}
 		char filename[256];
 		if (!GetAmxString(amx, params[1], filename, sizeof(filename)))
 		{
 			MaxmindStore::SetLastError("Invalid AMX address or filename too long.");
 			return 0;
 		}
-		return MaxmindStore::LoadDB(filename) ? 1 : 0;
+		return MaxmindStore::LoadDB(filename);
 	}
 
 	/**
@@ -314,7 +329,9 @@ namespace maxora
 	 */
 	cell AMX_NATIVE_CALL n_MMDB_Unload(AMX* amx, const cell* params)
 	{
-		MaxmindStore::UnloadDB();
+		if (params[0] < 1 * sizeof(cell))
+			return 0;
+		MaxmindStore::UnloadDB(params[1]);
 		return 1;
 	}
 
@@ -324,7 +341,9 @@ namespace maxora
 	 */
 	cell AMX_NATIVE_CALL n_MMDB_IsLoaded(AMX* amx, const cell* params)
 	{
-		return MaxmindStore::IsLoaded() ? 1 : 0;
+		if (params[0] < 1 * sizeof(cell))
+			return 0;
+		return MaxmindStore::IsLoaded(params[1]) ? 1 : 0;
 	}
 
 	/**
@@ -346,7 +365,8 @@ namespace maxora
 			return 0;
 		}
 
-		if (!SetAmxString(amx, params[1], err.c_str(), static_cast<uint32_t>(err.size()), params[2]))
+		if (!SetAmxString(amx, params[1], err.c_str(), static_cast<uint32_t>(err.size()),
+						  params[2]))
 		{
 			return 0;
 		}
@@ -360,20 +380,30 @@ namespace maxora
 	cell AMX_NATIVE_CALL n_MMDB_GetString(AMX* amx, const cell* params)
 	{
 		MaxmindStore::SetLastError("");
-		if (params[0] < 4 * sizeof(cell))
+		if (params[0] < 5 * sizeof(cell))
+		{
+			MaxmindStore::SetLastError("Invalid number of parameters.");
 			return 0;
+		}
+		int handle = params[1];
 		char ip[64];
 		char path[128];
-		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) ||
-			!GetAmxString(amx, params[2], path, sizeof(path)))
+		if (!GetAmxString(amx, params[2], ip, sizeof(ip)) ||
+			!GetAmxString(amx, params[3], path, sizeof(path)))
+		{
+			MaxmindStore::SetLastError("Invalid AMX address or string too long.");
 			return 0;
+		}
 
-		int size = params[4];
+		int size = params[5];
 		if (size <= 0)
+		{
+			MaxmindStore::SetLastError("Invalid size parameter.");
 			return 0;
+		}
 
 		MMDB_entry_data_s entry;
-		if (!EnsureDBSuccess(GetValueFromDB(ip, PreparePath(path), &entry)))
+		if (!EnsureDBSuccess(GetValueFromDB(handle, ip, PreparePath(path), &entry)))
 			return 0;
 
 		if (entry.type != MMDB_DATA_TYPE_UTF8_STRING)
@@ -382,7 +412,7 @@ namespace maxora
 			return 0;
 		}
 
-		if (!SetAmxString(amx, params[3], entry.utf8_string, entry.data_size, size))
+		if (!SetAmxString(amx, params[4], entry.utf8_string, entry.data_size, size))
 		{
 			MaxmindStore::SetLastError("Failed to write string to AMX.");
 			return 0;
@@ -398,16 +428,23 @@ namespace maxora
 	cell AMX_NATIVE_CALL n_MMDB_GetInt(AMX* amx, const cell* params)
 	{
 		MaxmindStore::SetLastError("");
-		if (params[0] < 3 * sizeof(cell))
+		if (params[0] < 4 * sizeof(cell))
+		{
+			MaxmindStore::SetLastError("Invalid number of parameters.");
 			return 0;
+		}
+		int handle = params[1];
 		char ip[64];
 		char path[128];
-		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) ||
-			!GetAmxString(amx, params[2], path, sizeof(path)))
+		if (!GetAmxString(amx, params[2], ip, sizeof(ip)) ||
+			!GetAmxString(amx, params[3], path, sizeof(path)))
+		{
+			MaxmindStore::SetLastError("Invalid AMX address or string too long.");
 			return 0;
+		}
 
 		MMDB_entry_data_s entry;
-		if (!EnsureDBSuccess(GetValueFromDB(ip, PreparePath(path), &entry)))
+		if (!EnsureDBSuccess(GetValueFromDB(handle, ip, PreparePath(path), &entry)))
 			return 0;
 
 		cell result;
@@ -440,7 +477,7 @@ namespace maxora
 			return 0;
 		}
 
-		if (!SetAmxCell(amx, params[3], result))
+		if (!SetAmxCell(amx, params[4], result))
 		{
 			MaxmindStore::SetLastError("Invalid AMX address for destination reference.");
 			return 0;
@@ -455,16 +492,23 @@ namespace maxora
 	cell AMX_NATIVE_CALL n_MMDB_GetFloat(AMX* amx, const cell* params)
 	{
 		MaxmindStore::SetLastError("");
-		if (params[0] < 3 * sizeof(cell))
+		if (params[0] < 4 * sizeof(cell))
+		{
+			MaxmindStore::SetLastError("Invalid number of parameters.");
 			return 0;
+		}
+		int handle = params[1];
 		char ip[64];
 		char path[128];
-		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) ||
-			!GetAmxString(amx, params[2], path, sizeof(path)))
+		if (!GetAmxString(amx, params[2], ip, sizeof(ip)) ||
+			!GetAmxString(amx, params[3], path, sizeof(path)))
+		{
+			MaxmindStore::SetLastError("Invalid AMX address or string too long.");
 			return 0;
+		}
 
 		MMDB_entry_data_s entry;
-		if (!EnsureDBSuccess(GetValueFromDB(ip, PreparePath(path), &entry)))
+		if (!EnsureDBSuccess(GetValueFromDB(handle, ip, PreparePath(path), &entry)))
 			return 0;
 
 		float val = 0.0f;
@@ -478,7 +522,7 @@ namespace maxora
 			return 0;
 		}
 
-		if (!SetAmxCell(amx, params[3], FloatToCell(val)))
+		if (!SetAmxCell(amx, params[4], FloatToCell(val)))
 		{
 			MaxmindStore::SetLastError("Invalid AMX address for destination reference.");
 			return 0;
@@ -493,16 +537,23 @@ namespace maxora
 	cell AMX_NATIVE_CALL n_MMDB_GetBool(AMX* amx, const cell* params)
 	{
 		MaxmindStore::SetLastError("");
-		if (params[0] < 3 * sizeof(cell))
+		if (params[0] < 4 * sizeof(cell))
+		{
+			MaxmindStore::SetLastError("Invalid number of parameters.");
 			return 0;
+		}
+		int handle = params[1];
 		char ip[64];
 		char path[128];
-		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) ||
-			!GetAmxString(amx, params[2], path, sizeof(path)))
+		if (!GetAmxString(amx, params[2], ip, sizeof(ip)) ||
+			!GetAmxString(amx, params[3], path, sizeof(path)))
+		{
+			MaxmindStore::SetLastError("Invalid AMX address or string too long.");
 			return 0;
+		}
 
 		MMDB_entry_data_s entry;
-		if (!EnsureDBSuccess(GetValueFromDB(ip, PreparePath(path), &entry)))
+		if (!EnsureDBSuccess(GetValueFromDB(handle, ip, PreparePath(path), &entry)))
 			return 0;
 
 		if (entry.type != MMDB_DATA_TYPE_BOOLEAN)
@@ -511,7 +562,7 @@ namespace maxora
 			return 0;
 		}
 
-		if (!SetAmxCell(amx, params[3], entry.boolean ? 1 : 0))
+		if (!SetAmxCell(amx, params[4], entry.boolean ? 1 : 0))
 		{
 			MaxmindStore::SetLastError("Invalid AMX address for destination reference.");
 			return 0;
@@ -526,16 +577,23 @@ namespace maxora
 	cell AMX_NATIVE_CALL n_MMDB_HasField(AMX* amx, const cell* params)
 	{
 		MaxmindStore::SetLastError("");
-		if (params[0] < 3 * sizeof(cell))
+		if (params[0] < 4 * sizeof(cell))
+		{
+			MaxmindStore::SetLastError("Invalid number of parameters.");
 			return 0;
+		}
+		int handle = params[1];
 		char ip[64];
 		char path[128];
-		if (!GetAmxString(amx, params[1], ip, sizeof(ip)) ||
-			!GetAmxString(amx, params[2], path, sizeof(path)))
+		if (!GetAmxString(amx, params[2], ip, sizeof(ip)) ||
+			!GetAmxString(amx, params[3], path, sizeof(path)))
+		{
+			MaxmindStore::SetLastError("Invalid AMX address or string too long.");
 			return 0;
+		}
 
 		MMDB_entry_data_s entry;
-		DBResult res = GetValueFromDB(ip, PreparePath(path), &entry);
+		DBResult res = GetValueFromDB(handle, ip, PreparePath(path), &entry);
 
 		if (res == DBResult::Error)
 		{
@@ -544,7 +602,7 @@ namespace maxora
 
 		bool exists = (res == DBResult::Success);
 
-		if (!SetAmxCell(amx, params[3], exists ? 1 : 0))
+		if (!SetAmxCell(amx, params[4], exists ? 1 : 0))
 		{
 			MaxmindStore::SetLastError("Invalid AMX address for destination reference.");
 			return 0;
@@ -559,20 +617,27 @@ namespace maxora
 	cell AMX_NATIVE_CALL n_MMDB_GetNetmask(AMX* amx, const cell* params)
 	{
 		MaxmindStore::SetLastError("");
-		if (params[0] < 2 * sizeof(cell))
-			return 0;
-		char ip[64];
-		if (!GetAmxString(amx, params[1], ip, sizeof(ip)))
-			return 0;
-
-		if (!MaxmindStore::IsLoaded())
+		if (params[0] < 3 * sizeof(cell))
 		{
-			MaxmindStore::SetLastError("Database not loaded.");
+			MaxmindStore::SetLastError("Invalid number of parameters.");
+			return 0;
+		}
+		int handle = params[1];
+		char ip[64];
+		if (!GetAmxString(amx, params[2], ip, sizeof(ip)))
+		{
+			MaxmindStore::SetLastError("Invalid AMX address or string too long.");
+			return 0;
+		}
+
+		MMDB_s* db = MaxmindStore::GetDB(handle);
+		if (!db)
+		{
+			MaxmindStore::SetLastError("Invalid database handle.");
 			return 0;
 		}
 		int gai_err, mmdb_err;
-		MMDB_lookup_result_s result =
-			MMDB_lookup_string(MaxmindStore::GetDB(), ip, &gai_err, &mmdb_err);
+		MMDB_lookup_result_s result = MMDB_lookup_string(db, ip, &gai_err, &mmdb_err);
 
 		if (gai_err != 0)
 		{
@@ -590,7 +655,7 @@ namespace maxora
 			return 0;
 		}
 
-		if (!SetAmxCell(amx, params[2], result.netmask))
+		if (!SetAmxCell(amx, params[3], result.netmask))
 		{
 			MaxmindStore::SetLastError("Invalid AMX address for destination reference.");
 			return 0;

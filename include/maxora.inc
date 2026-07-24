@@ -1,90 +1,99 @@
-#if defined _maxora_included
+#if defined MAXORA_INCLUDED
     #endinput
 #endif
-#define _maxora_included
+#define MAXORA_INCLUDED
 
 /**
  * Loads a MaxMind DB file (.mmdb) into memory.
  * 
  * @param filename  The path to the MaxMind DB file.
- * @return          True if the database was loaded successfully, false otherwise.
+ * @return          A valid MMDB handle if successful, or MMDB:0 on failure.
  */
-native bool:MMDB_Load(const filename[]);
+native MMDB:MMDB_Load(const filename[]);
 
 /**
- * Unloads the currently loaded MaxMind database from memory.
+ * Unloads the specified MaxMind database from memory.
  * 
  * It is good practice to call this when your script unloads or server shuts down, 
  * although the plugin will attempt to clean up automatically.
+ * 
+ * @param handle    The database handle.
  */
-native MMDB_Unload();
+native MMDB_Unload(MMDB:handle);
 
 /**
- * Checks if a MaxMind database is currently loaded and ready to be queried.
+ * Checks if a specific MaxMind database is currently loaded and ready to be queried.
  * 
- * @return          True if a database is loaded, false otherwise.
+ * @param handle    The database handle.
+ * @return          True if the database is loaded, false otherwise.
  */
-native bool:MMDB_IsLoaded();
+native bool:MMDB_IsLoaded(MMDB:handle);
 
 /**
  * Retrieves a string value from a specific path in the MaxMind database.
  * 
+ * @param handle    The database handle.
  * @param ip        The IP address to query (e.g., "8.8.8.8").
  * @param path      The dot-separated path to the data field (e.g., "country.names.en").
  * @param dest      The string array where the result will be stored.
  * @param size      The maximum size of the destination array.
  * @return          True if the string was successfully retrieved, false otherwise.
  */
-native bool:MMDB_GetString(const ip[], const path[], dest[], size = sizeof(dest));
+native bool:MMDB_GetString(MMDB:handle, const ip[], const path[], dest[], size = sizeof(dest));
 
 /**
  * Retrieves an integer value from a specific path in the MaxMind database.
  * 
+ * @param handle    The database handle.
  * @param ip        The IP address to query.
  * @param path      The dot-separated path to the data field (e.g., "autonomous_system_number").
  * @param dest      The variable where the integer result will be stored (passed by reference).
  * @return          True if the integer was successfully retrieved, false otherwise.
  */
-native bool:MMDB_GetInt(const ip[], const path[], &dest);
+native bool:MMDB_GetInt(MMDB:handle, const ip[], const path[], &dest);
 
 /**
  * Retrieves a floating-point value from a specific path in the MaxMind database.
  * 
+ * @param handle    The database handle.
  * @param ip        The IP address to query.
  * @param path      The dot-separated path to the data field (e.g., "location.latitude").
  * @param dest      The Float variable where the result will be stored (passed by reference).
  * @return          True if the float was successfully retrieved, false otherwise.
  */
-native bool:MMDB_GetFloat(const ip[], const path[], &Float:dest);
+native bool:MMDB_GetFloat(MMDB:handle, const ip[], const path[], &Float:dest);
 
 /**
  * Retrieves a boolean value from a specific path in the MaxMind database.
  * 
+ * @param handle    The database handle.
  * @param ip        The IP address to query.
  * @param path      The dot-separated path to the data field (e.g., "registered_country.is_in_european_union").
  * @param dest      The bool variable where the result will be stored (passed by reference).
  * @return          True if the boolean was successfully retrieved, false otherwise.
  */
-native bool:MMDB_GetBool(const ip[], const path[], &bool:dest);
+native bool:MMDB_GetBool(MMDB:handle, const ip[], const path[], &bool:dest);
 
 /**
  * Checks if a specific data field exists for the given IP address, without actually extracting the data.
  * 
+ * @param handle    The database handle.
  * @param ip        The IP address to query.
  * @param path      The dot-separated path to check.
  * @param exists    Variable that will be set to true if the field exists, or false if it does not (passed by reference).
  * @return          True if the query itself succeeded (even if the field does not exist), false if an error occurred.
  */
-native bool:MMDB_HasField(const ip[], const path[], &bool:exists);
+native bool:MMDB_HasField(MMDB:handle, const ip[], const path[], &bool:exists);
 
 /**
  * Retrieves the routing prefix (netmask) associated with the IP address.
  * 
+ * @param handle    The database handle.
  * @param ip        The IP address to query.
  * @param dest      The variable where the netmask integer (e.g. 24 for a /24 subnet) will be stored.
  * @return          True if the netmask was retrieved, false otherwise.
  */
-native bool:MMDB_GetNetmask(const ip[], &dest);
+native bool:MMDB_GetNetmask(MMDB:handle, const ip[], &dest);
 
 /**
  * Retrieves the last internal error message generated by the plugin.
@@ -117,73 +126,111 @@ native bool:MMDB_GetLastError(dest[], size = sizeof(dest));
 /**
  * Retrieves the ISO 2-letter country code for an IP.
  * 
+ * @param handle    The database handle.
  * @param ip        The IP address to query.
  * @param dest      The string array where the code (e.g., "US") will be stored.
  * @param size      The maximum size of the destination array.
  * @return          True on success, false otherwise.
  */
-stock bool:MMDB_GetCountryCode(const ip[], dest[], size = sizeof(dest))
+stock bool:MMDB_GetCountryCode(MMDB:handle, const ip[], dest[], size = sizeof(dest))
 {
-    return MMDB_GetString(ip, "country.iso_code", dest, size);
+    return MMDB_GetString(handle, ip, "country.iso_code", dest, size);
 }
 
 /**
  * Retrieves the country name for an IP.
  * 
+ * @param handle    The database handle.
  * @param ip        The IP address to query.
  * @param dest      The string array where the name will be stored.
  * @param size      The maximum size of the destination array.
  * @param lang      The language to retrieve the name in (defaults to English). Use MMDB_LANG_* constants.
  * @return          True on success, false otherwise.
  */
-stock bool:MMDB_GetCountryName(const ip[], dest[], size = sizeof(dest), const lang[] = MMDB_LANG_ENGLISH)
+stock bool:MMDB_GetCountryName(MMDB:handle, const ip[], dest[], size = sizeof(dest), const lang[] = MMDB_LANG_ENGLISH)
 {
     new path[64];
     format(path, sizeof(path), "country.names.%s", lang);
-    return MMDB_GetString(ip, path, dest, size);
+    return MMDB_GetString(handle, ip, path, dest, size);
 }
 
 /**
  * Retrieves the city name for an IP.
  * 
+ * @param handle    The database handle.
  * @param ip        The IP address to query.
  * @param dest      The string array where the name will be stored.
  * @param size      The maximum size of the destination array.
  * @param lang      The language to retrieve the name in (defaults to English). Use MMDB_LANG_* constants.
  * @return          True on success, false otherwise.
  */
-stock bool:MMDB_GetCityName(const ip[], dest[], size = sizeof(dest), const lang[] = MMDB_LANG_ENGLISH)
+stock bool:MMDB_GetCityName(MMDB:handle, const ip[], dest[], size = sizeof(dest), const lang[] = MMDB_LANG_ENGLISH)
 {
     new path[64];
     format(path, sizeof(path), "city.names.%s", lang);
-    return MMDB_GetString(ip, path, dest, size);
+    return MMDB_GetString(handle, ip, path, dest, size);
+}
+
+/**
+ * Retrieves the region/state/subdivision name for an IP (e.g., "California" or "Bavaria").
+ * Usually requires the GeoLite2-City database.
+ * 
+ * @param handle    The database handle.
+ * @param ip        The IP address to query.
+ * @param dest      The string array where the name will be stored.
+ * @param size      The maximum size of the destination array.
+ * @param lang      The language to retrieve the name in (defaults to English). Use MMDB_LANG_* constants.
+ * @return          True on success, false otherwise.
+ */
+stock bool:MMDB_GetRegionName(MMDB:handle, const ip[], dest[], size = sizeof(dest), const lang[] = MMDB_LANG_ENGLISH)
+{
+    new path[64];
+    format(path, sizeof(path), "subdivisions.0.names.%s", lang);
+    return MMDB_GetString(handle, ip, path, dest, size);
+}
+
+/**
+ * Retrieves the ISO code of the region/state/subdivision for an IP (e.g., "CA" or "BY").
+ * Usually requires the GeoLite2-City database.
+ * 
+ * @param handle    The database handle.
+ * @param ip        The IP address to query.
+ * @param dest      The string array where the code will be stored.
+ * @param size      The maximum size of the destination array.
+ * @return          True on success, false otherwise.
+ */
+stock bool:MMDB_GetRegionCode(MMDB:handle, const ip[], dest[], size = sizeof(dest))
+{
+    return MMDB_GetString(handle, ip, "subdivisions.0.iso_code", dest, size);
 }
 
 /**
  * Retrieves the Autonomous System Number (ASN) for an IP.
  * Usually requires the GeoLite2-ASN database.
  * 
+ * @param handle    The database handle.
  * @param ip        The IP address to query.
  * @param dest      Variable where the ASN will be stored.
  * @return          True on success, false otherwise.
  */
-stock bool:MMDB_GetASN(const ip[], &dest)
+stock bool:MMDB_GetASN(MMDB:handle, const ip[], &dest)
 {
-    return MMDB_GetInt(ip, "autonomous_system_number", dest);
+    return MMDB_GetInt(handle, ip, "autonomous_system_number", dest);
 }
 
 /**
  * Retrieves the ISP or Organization name for an IP.
  * Usually requires the GeoLite2-ASN database.
  * 
+ * @param handle    The database handle.
  * @param ip        The IP address to query.
  * @param dest      The string array where the ISP name will be stored.
  * @param size      The maximum size of the destination array.
  * @return          True on success, false otherwise.
  */
-stock bool:MMDB_GetISP(const ip[], dest[], size = sizeof(dest))
+stock bool:MMDB_GetISP(MMDB:handle, const ip[], dest[], size = sizeof(dest))
 {
     // Try "isp" field first, fallback to "autonomous_system_organization" if not found.
-    if (MMDB_GetString(ip, "isp", dest, size)) return true;
-    return MMDB_GetString(ip, "autonomous_system_organization", dest, size);
+    if (MMDB_GetString(handle, ip, "isp", dest, size)) return true;
+    return MMDB_GetString(handle, ip, "autonomous_system_organization", dest, size);
 }
