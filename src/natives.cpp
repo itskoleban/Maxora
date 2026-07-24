@@ -279,8 +279,6 @@ namespace maxora
 		return DBResult::Success;
 	}
 
-
-
 	/**
 	 * @brief Converts a C++ float to a Pawn cell without casting the value, preserving the bit
 	 * pattern.
@@ -370,8 +368,8 @@ namespace maxora
 	}
 
 	/**
-	 * @brief native MMDB_GetString(MMDB:handle, const ip[], const path[], dest[], size = sizeof(dest));
-	 * Retrieves a string value from the database.
+	 * @brief native MMDB_GetString(MMDB:handle, const ip[], const path[], dest[], size =
+	 * sizeof(dest)); Retrieves a string value from the database.
 	 */
 	cell AMX_NATIVE_CALL n_MMDB_GetString(AMX* amx, const cell* params)
 	{
@@ -594,7 +592,8 @@ namespace maxora
 
 		MMDB_entry_data_s entry;
 		DBResult res = GetValueFromDB(handle, ip, PreparePath(path), &entry);
-		if (res == DBResult::InvalidHandle || res == DBResult::InvalidParams) return static_cast<cell>(res);
+		if (res == DBResult::InvalidHandle || res == DBResult::InvalidParams)
+			return static_cast<cell>(res);
 		bool exists = (res == DBResult::Success);
 
 		if (!SetAmxCell(amx, params[4], exists ? 1 : 0))

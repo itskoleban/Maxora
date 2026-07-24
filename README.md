@@ -114,14 +114,14 @@ All data extraction natives return a predefined status macro (e.g. `MMDB_SUCCESS
 
 ### Return Codes
 
-| Macro                  | Value | Description                                                               |
-| ---------------------- | ----- | ------------------------------------------------------------------------- |
-| `MMDB_SUCCESS`         | `1`   | The query was executed successfully and data was assigned to the reference. |
-| `MMDB_ERROR`           | `0`   | A fatal error occurred (e.g. malformed IP address, libmaxminddb failure). |
-| `MMDB_NOT_FOUND`       | `-1`  | The IP exists, but the requested data field does not.                     |
-| `MMDB_INVALID_HANDLE`  | `-2`  | The provided database handle is invalid or was not loaded.                |
-| `MMDB_INVALID_PARAMS`  | `-3`  | Invalid parameters passed to the native function (e.g., negative size).   |
-| `MMDB_TYPE_MISMATCH`   | `-4`  | The data type in the DB does not match the native called (e.g., Float on String). |
+| Macro                 | Value | Description                                                                       |
+| --------------------- | ----- | --------------------------------------------------------------------------------- |
+| `MMDB_SUCCESS`        | `1`   | The query was executed successfully and data was assigned to the reference.       |
+| `MMDB_ERROR`          | `0`   | A fatal error occurred (e.g. malformed IP address, libmaxminddb failure).         |
+| `MMDB_NOT_FOUND`      | `-1`  | The IP exists, but the requested data field does not.                             |
+| `MMDB_INVALID_HANDLE` | `-2`  | The provided database handle is invalid or was not loaded.                        |
+| `MMDB_INVALID_PARAMS` | `-3`  | Invalid parameters passed to the native function (e.g., negative size).           |
+| `MMDB_TYPE_MISMATCH`  | `-4`  | The data type in the DB does not match the native called (e.g., Float on String). |
 
 ### Core Natives
 
