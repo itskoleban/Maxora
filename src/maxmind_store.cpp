@@ -36,19 +36,23 @@ namespace maxora
 		return handle;
 	}
 
-	void MaxmindStore::UnloadDB(int handle)
+	bool MaxmindStore::UnloadDB(int handle)
 	{
 		auto it = databases_.find(handle);
 		if (it != databases_.end())
 		{
 			MMDB_close(&it->second);
 			databases_.erase(it);
+
+			if (databases_.empty())
+			{
+				nextHandle_ = 1;
+			}
+			return true;
 		}
 
-		if (databases_.empty())
-		{
-			nextHandle_ = 1;
-		}
+		SetLastError("Invalid database handle.");
+		return false;
 	}
 
 	void MaxmindStore::UnloadAll()
