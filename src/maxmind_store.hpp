@@ -33,8 +33,9 @@ namespace maxora
 		/**
 		 * @brief Unloads a specific MaxMind database and frees memory.
 		 * @param handle The database handle.
+		 * @return True if successful, false if the handle was invalid.
 		 */
-		static void UnloadDB(int handle);
+		static bool UnloadDB(int handle);
 
 		/**
 		 * @brief Unloads all currently loaded databases.
