@@ -1,0 +1,16 @@
+{
+  "source_commit": null,
+  "candidate_tag": "",
+  "package_sha256": {},
+  "gates": {},
+  "soak": {
+    "status": "unverified",
+    "duration_seconds": 0,
+    "environment": null,
+    "workload": null,
+    "evidence": null
+  },
+  "unresolved_critical_high": null,
+  "reviewer": null,
+  "reviewed_at": null
+}

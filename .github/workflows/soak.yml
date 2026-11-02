@@ -1,0 +1,53 @@
+name: Continuous 24-hour candidate soak
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_tag:
+        description: Exact prerelease tag; requires an existing trusted Linux x86-capable runner
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  soak:
+    runs-on: [self-hosted, linux, maxora-soak]
+    timeout-minutes: 1500
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Validate candidate tag and download exact package
+        env:
+          RC_TAG: ${{ inputs.candidate_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$RC_TAG" =~ ^v2\.0\.0-rc\.[0-9]+$ ]]
+          git fetch origin "refs/tags/$RC_TAG:refs/tags/$RC_TAG"
+          SHA=$(git rev-parse "refs/tags/$RC_TAG^{commit}")
+          git checkout --detach "$SHA"
+          gh release download "$RC_TAG" --pattern 'Maxora-2.0.0-linux-x86.zip*' --dir dist
+          python3 scripts/verify_package.py dist/Maxora-2.0.0-linux-x86.zip --commit "$SHA"
+          python3 -m zipfile -e dist/Maxora-2.0.0-linux-x86.zip rc
+      - name: Build pinned compiler and benchmark harness
+        run: |
+          cmake -S . -B build -G Ninja -DMAXORA_BUILD_COMPONENT=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure
+          cmake -S lib/compiler/source/compiler -B build-pawn -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-pawn --parallel 2 --target pawncc
+          python3 scripts/download_runtime.py --platform linux-x86 --out runtime.tar.gz
+      - name: Short stress and runtime checks must pass before soak
+        run: |
+          build/maxora_benchmark --seconds 60 > pre-soak-stress.jsonl
+          python3 scripts/openmp_integration.py --server-archive runtime.tar.gz --component rc/components/Maxora.so --pawncc build-pawn/pawncc --duration 30 --evidence pre-soak-runtime.json
+      - name: Continuous runtime workload for 24 hours
+        run: python3 scripts/openmp_integration.py --server-archive runtime.tar.gz --component rc/components/Maxora.so --pawncc build-pawn/pawncc --duration 86400 --evidence runtime-soak.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: continuous-soak-evidence
+          path: |
+            runtime-soak.json
+            pre-soak-runtime.json
+            pre-soak-stress.jsonl

@@ -1,225 +1,77 @@
-# Maxora
+# Maxora 2.0
 
-[![Release](https://img.shields.io/github/v/release/itskoleban/Maxora?style=flat-square)](https://github.com/itskoleban/Maxora/releases/latest)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/itskoleban/Maxora/release.yml?style=flat-square)](https://github.com/itskoleban/Maxora/actions)
+Maxora is an open.mp component for local, read-only MaxMind DB lookups from Pawn. Version 2.0.0 is a new implementation with a new API. Its production validation is tracked in [the readiness report](docs/production-readiness.md); source availability does not establish a stable release.
 
-Maxora is a highly optimized [open.mp](https://open.mp/) component for querying [MaxMind DB (`.mmdb`)](https://maxmind.github.io/MaxMind-DB/) databases directly from Pawn scripts.
+## Capabilities
 
-It provides highly performant IP geolocation lookups (such as Country, City, ASN, and ISP) for high-concurrency open.mp servers without introducing garbage collection overhead to the main server thread.
+- Independent script-owned databases, explicit unload, and transactional reload.
+- IPv4 and IPv6 numeric parsing without DNS or external services.
+- Reusable lookup snapshots, generic nested map/array paths, and type inspection.
+- Checked string, signed-cell integer, binary32 float, Boolean and wide-integer/byte text extraction.
+- Handles with generations, script unload cleanup, bounded resources and explicit status codes.
+- CTest, native-boundary tests, real open.mp smoke tests, parser fuzzing, sanitizers and reproducible benchmarks.
 
-## Table of Contents
+The intended deployment targets are **Windows x86 and Linux x86**, tested against open.mp **v1.6.7.3218**. See the readiness report for what actually passed on the candidate. Core-only x64 builds support development; they are not additional component distribution targets.
 
-- [Features](#features)
-- [Architecture / Design Overview](#architecture--design-overview)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Usage](#usage)
-- [API Reference](#api-reference)
-- [Error Handling / Troubleshooting](#error-handling--troubleshooting)
-- [Development & Testing](#development--testing)
-
----
-
-## Features
-
-- **Performance (Memory-Mapped I/O)**: Uses `MMDB_MODE_MMAP` for extremely fast `O(depth)` lookups directly from the OS disk cache.
-- **Optimized Memory Usage**: Executes hot paths (reading from AMX, preparing paths, and querying the database) largely on the C++ stack using fixed-size buffers and `thread_local` memory arrays to minimize dynamic heap allocations per query.
-- **Memory Safety**: Utilizes open.mp's native `StringView` and strict bounds checking to prevent buffer overflows during AMX virtual machine interaction.
-- **Runtime Loading**: You can load new `.mmdb` databases safely at runtime via Handles. Invalid or corrupted databases are rejected gracefully.
-- **Dynamic Path Navigation**: Natively queries any arbitrary depth hierarchy (e.g., `"country.names.en"`) in the DB tree. Supports up to 127 path segments. Custom delimiter `/` is supported.
-
-## Architecture / Design Overview
-
-Maxora is built strictly against the modern `IComponent` interface of the open.mp SDK.
-
-- **Pawn Natives**: Bridges the Pawn AMX machine and the C++ backend (`src/natives.cpp`). Extracts arguments using pointer references to prevent null-termination vulnerabilities, and utilizes `thread_local` arrays for efficient path parsing.
-- **Backend Engine**: Wraps the standard C API of `libmaxminddb` (`src/maxmind_store.cpp`). It manages the lifecycle of `MMDB_s` contexts using a handle-based architecture, allowing multiple databases to be loaded and queried simultaneously.
-- **In-Place Parser**: The internal `PreparePath` function mutates the path string in-place on the stack, constructing a node-pointer array efficiently without relying on heavy heap construction.
-
-## Requirements
-
-- **Server**: open.mp (x86 architecture).
-- **Supported OS**: Windows, Linux.
-- **Database**: Valid MaxMind Database (`.mmdb` format).
-- **Build Requirements**: CMake 3.19+, C++17 Compiler (MSVC 19+, GCC, or Clang), `gcc-multilib` / `g++-multilib` for 32-bit Linux builds.
-
-## Installation
-
-1. Download the latest compiled binaries (`Maxora.dll` for Windows or `Maxora.so` for Linux) from the [Releases page](https://github.com/itskoleban/Maxora/releases/latest).
-2. Place the binary in your open.mp `components` directory (open.mp will automatically load it).
-3. Download a `.mmdb` database (e.g., [GeoLite2 Free Geolocation Data](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data)) and place it in the server's root directory.
-4. Move `include/maxora.inc` to your `pawno/include` folder.
-5. Include the library in your script:
+## Pawn usage
 
 ```pawn
 #include <maxora>
-```
 
-## Usage
+new MaxoraDb:database;
 
-All configurations are handled programmatically through the Pawn API via `MMDB_Load`. No external configuration files are needed.
+main()
+{
+    if (Maxora_Load("scriptfiles/GeoLite2-Country.mmdb", database) != MAXORA_OK)
+        return;
 
-```pawn
-#include <open.mp>
-#include <maxora>
-
-new MMDB:CityDB;
-
-main() {
-	print("Maxora example script loaded.");
-}
-
-public OnGameModeInit() {
-	// The path resolves from your server's root directory.
-	// You can load multiple databases by assigning them to different variables.
-	CityDB = MMDB_Load("scriptfiles/GeoLite2-Country.mmdb");
-
-	if (CityDB != INVALID_MMDB_HANDLE) {
-		print("[MMDB] Database loaded successfully.");
-	} else {
-		new err[128];
-		MMDB_GetLastError(err, sizeof(err));
-		printf("[MMDB] Failed to load database. Reason: %s", err);
-	}
-
-	return 1;
-}
-
-public OnPlayerConnect(playerid) {
-	new ip[16], country[64];
-
-	GetPlayerIp(playerid, ip, sizeof(ip));
-
-	// Querying a localized English country name using stock helpers
-	if (MMDB_GetCountryName(CityDB, ip, country, sizeof(country), MMDB_LANG_ENGLISH) == MMDB_SUCCESS) {
-		printf("[MMDB] Player %d connected | IP: %s | Country: %s", playerid, ip, country);
-	} else {
-		new err[128];
-		MMDB_GetLastError(err, sizeof(err));
-		printf(
-			"[MMDB] Player %d connected | IP: %s | Country: Unknown (Reason: %s)",
-			playerid,
-			ip,
-			err
-		);
-	}
-
-	return 1;
+    new MaxoraResult:result;
+    if (Maxora_Lookup(database, "8.8.8.8", result) == MAXORA_OK)
+    {
+        new country[3], required;
+        // Country availability depends on the database edition and record.
+        Maxora_GetString(result, "/country/iso_code", country, sizeof(country), required);
+        Maxora_Release(result);
+    }
+    Maxora_Unload(database);
 }
 ```
 
-## API Reference
+Every native returns a status. `MAXORA_OK` is **zero**; do not test success as a truthy value. Handles are outputs, not native return values. The public include remains `#include <maxora>`. The old `MMDB_*` API is intentionally absent. See [the full API reference](docs/api.md) and [compiled examples](examples/).
 
-All data extraction natives return a predefined status macro (e.g. `MMDB_SUCCESS`, `MMDB_NOT_FOUND`). Data is assigned safely to reference variables (`&dest`).
+## Install and build
 
-### Return Codes
+Install a validated package's `components/Maxora.dll` or `components/Maxora.so` into the server components directory and `include/maxora.inc` into your Pawn compiler include path. A database must be supplied separately. Maxora neither downloads nor updates databases. Follow the provider's update procedure and license terms.
 
-| Macro                 | Value | Description                                                                       |
-| --------------------- | ----- | --------------------------------------------------------------------------------- |
-| `MMDB_SUCCESS`        | `1`   | The query was executed successfully and data was assigned to the reference.       |
-| `MMDB_ERROR`          | `0`   | A fatal error occurred (e.g. malformed IP address, libmaxminddb failure).         |
-| `MMDB_NOT_FOUND`      | `-1`  | The IP exists, but the requested data field does not.                             |
-| `MMDB_INVALID_HANDLE` | `-2`  | The provided database handle is invalid or was not loaded.                        |
-| `MMDB_INVALID_PARAMS` | `-3`  | Invalid parameters passed to the native function (e.g., negative size).           |
-| `MMDB_TYPE_MISMATCH`  | `-4`  | The data type in the DB does not match the native called (e.g., Float on String). |
-
-### Core Natives
-
-| Native                                 | Description                                                          |
-| -------------------------------------- | -------------------------------------------------------------------- |
-| `MMDB:MMDB_Load(const filename[])`     | Loads an `.mmdb` file into memory. Returns a handle on success.      |
-| `MMDB_Unload(MMDB:handle)`             | Safely unloads the database and frees OS file descriptors.           |
-| `bool:MMDB_IsLoaded(MMDB:handle)`      | Returns `true` if a database is actively mapped in memory.           |
-| `bool:MMDB_GetLastError(dest[], size)` | Extracts the last internal error message generated by the component. |
-
-### Data Extraction Natives
-
-| Native                                                                | Description                                                          |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `MMDB_GetString(MMDB:handle, const ip[], const path[], dest[], size)` | Extracts a UTF-8 string from the given JSON-like path.               |
-| `MMDB_GetInt(MMDB:handle, const ip[], const path[], &dest)`           | Extracts a 16, 32, or 64-bit integer (safe against cell bounds).     |
-| `MMDB_GetFloat(MMDB:handle, const ip[], const path[], &Float:dest)`   | Extracts a single or double-precision float.                         |
-| `MMDB_GetBool(MMDB:handle, const ip[], const path[], &bool:dest)`     | Extracts a boolean state.                                            |
-| `MMDB_HasField(MMDB:handle, const ip[], const path[], &bool:exists)`  | Checks if a path exists within the IP's block without extracting it. |
-| `MMDB_GetNetmask(MMDB:handle, const ip[], &dest)`                     | Retrieves the IPv4/IPv6 routing prefix (netmask) for the given IP.   |
-
-### Helper Functions (Stocks)
-
-These wrappers are provided in `maxora.inc`. They only compile into your script if utilized.
-
-| Stock Helper                                                         | Description                                           |
-| -------------------------------------------------------------------- | ----------------------------------------------------- |
-| `MMDB_GetCountryCode(MMDB:handle, const ip[], dest[], size)`         | Retrieves the ISO 2-letter country code (e.g., "US"). |
-| `MMDB_GetCountryName(MMDB:handle, const ip[], dest[], size, lang[])` | Retrieves the localized country name.                 |
-| `MMDB_GetRegionCode(MMDB:handle, const ip[], dest[], size)`          | Retrieves the region/state ISO code (e.g., "CA").     |
-| `MMDB_GetRegionName(MMDB:handle, const ip[], dest[], size, lang[])`  | Retrieves the localized region/state name.            |
-| `MMDB_GetCityName(MMDB:handle, const ip[], dest[], size, lang[])`    | Retrieves the localized city name.                    |
-| `MMDB_GetASN(MMDB:handle, const ip[], &dest)`                        | Retrieves the Autonomous System Number.               |
-| `MMDB_GetISP(MMDB:handle, const ip[], dest[], size)`                 | Retrieves the Internet Service Provider name.         |
-
-#### Language Constants
-
-`MMDB_LANG_ENGLISH` ("en"), `MMDB_LANG_SPANISH` ("es"), `MMDB_LANG_GERMAN` ("de"), `MMDB_LANG_FRENCH` ("fr"), `MMDB_LANG_JAPANESE` ("ja"), `MMDB_LANG_PORTUGUESE` ("pt-BR"), `MMDB_LANG_RUSSIAN` ("ru"), `MMDB_LANG_CHINESE` ("zh-CN").
-
-### Database Compatibility
-
-MaxMind offers both free and paid database families. The functions you can successfully call depend on the database you loaded:
-
-| Database Type        | Supported Helpers                                          | Notes                                                                 |
-| -------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------- |
-| **GeoLite2-City**    | `GetCountryCode/Name`, `GetRegionCode/Name`, `GetCityName` | The most complete geolocation DB. Includes country, region, and city. |
-| **GeoLite2-Country** | `GetCountryCode/Name`                                      | Will return `MMDB_NOT_FOUND` for city and region queries.                      |
-| **GeoLite2-ASN**     | `GetASN`, `GetISP`                                         | Contains routing data. Does **not** contain any country or city data. |
-
-> [!IMPORTANT]
-> This plugin has only been developed and tested using the free **GeoLite2** database family. It may work with paid variants like GeoIP2, but such usage remains completely untested.
-
-_(Note: Functions such as `MMDB_GetNetmask` and generic path-based lookups like `MMDB_GetString` work universally on any database that actually contains the requested field path)._
-
-## Error Handling / Troubleshooting
-
-Maxora safely catches internal exceptions and exposes them via `MMDB_GetLastError`.
-Known internal errors:
-
-- `Database not loaded.`: Attempted to query data before calling `MMDB_Load`.
-- `Field not found.`: The specific JSON path requested does not exist for the given IP block.
-- `Path contains too many segments (limit 127).`: The requested path exceeds the delimiter node limit.
-- `Invalid AMX address or filename too long.`: Memory issue within the AMX environment during string retrieval.
-
-## Development & Testing
-
-1. Clone the repository recursively to fetch submodules:
-
-```bash
+```sh
 git clone --recursive https://github.com/itskoleban/Maxora.git
+cd Maxora
+cmake -S . -B build -A Win32
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release --output-on-failure
 ```
 
-2. Configure CMake:
+Use the rewrite branch until it is reviewed and merged. See [build instructions](docs/build.md) for Linux x86 and core-only builds. Dependencies are pinned Git submodules: libmaxminddb **1.14.1**, the official open.mp SDK, and the official Pawn compiler. Preserve the nested submodule pins; do not replace them with moving branch heads.
 
-```bash
-cmake -S . -B build -A Win32 -DCMAKE_BUILD_TYPE=Release
-```
+## Documentation
 
-3. Build the component:
+- [Installation and updates](docs/installation.md)
+- [Pawn API and error reference](docs/api.md)
+- [Architecture and functional specification](docs/architecture.md), [testable contracts](docs/specification.md)
+- [Build](docs/build.md), [development and testing](docs/development.md)
+- [Performance and soak methodology](docs/performance.md)
+- [Troubleshooting](docs/troubleshooting.md), [security considerations](docs/security.md)
+- [Migration from 1.x](docs/migration.md)
+- [Changelog](CHANGELOG.md), [2.0.0 release notes](docs/release-notes-v2.0.0.md)
+- [Production readiness and validation](docs/production-readiness.md)
 
-```bash
-cmake --build build --config Release
-```
+## Limits and deployment responsibilities
 
-### Running Backend Tests
+Calls run synchronously on the Pawn execution thread. Concurrent callers are unsupported. Each script may own 64 database handles and 256 lookup handles; the component has 4,095 resource slots. Paths are bounded to 1,024 bytes and 32 tokens. Files are limited to 1 GiB. Keep mapped database files immutable and reload a newly deployed file instead of overwriting an active mapping. Old snapshots retain old mappings until released.
 
-The project includes a standalone C++ test target named `maxora_test` to verify backend store behavior independently of the open.mp runtime.
+Generations retire before wrapping, so stale handles never alias new resources within a process. The 31-bit handle domain is finite: at most 4,095 × 524,287 successful resource creations before all slots retire. Resource-limit errors are explicit. Release results promptly and plan process restarts for workloads that approach this bound. No claim of unlimited lifetime, arbitrary database trust, zero allocations, or speed relative to 1.x is made.
 
-1. Compile the `maxora_test` target via CMake.
-2. Run the resulting executable located in `build/Release/maxora_test.exe` (or `build/maxora_test` on Linux).
+## License and history
 
-## Build and Release Process
+Maxora retains its [MIT license](LICENSE), copyright, Git history and v1.x release tags. The rewrite replaces implementation files without rewriting public history. Packages include dependency licenses and notices. Synthetic tests use the pinned MaxMind-DB fixtures under their redistributable license; no commercial or GeoLite database is committed.
 
-- **CI/CD**: Managed via GitHub Actions (`.github/workflows/release.yml`).
-- Triggers on pushed version tags (`v*`).
-- Compiles standard 32-bit `Maxora.dll` for Windows and `Maxora.so` for Linux, utilizing GCC `-m32` cross-compilation on Ubuntu.
-- Automatically creates a GitHub Release containing both artifacts.
-
----
-
-_This project relies on [libmaxminddb](https://github.com/maxmind/libmaxminddb) and the modern [open.mp SDK](https://github.com/openmultiplayer/open.mp)._

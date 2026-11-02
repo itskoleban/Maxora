@@ -1,0 +1,27 @@
+"""Check benchmark output integrity without claiming stable hosted-runner timing."""
+import argparse
+import json
+import math
+import pathlib
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("result", type=pathlib.Path)
+    parser.add_argument("--minimum-seconds", type=float, default=0)
+    args = parser.parse_args()
+    records = [json.loads(line) for line in args.result.read_text(encoding="utf-8").splitlines() if line.strip()]
+    summary = next((x for x in records if x.get("kind") == "summary"), {})
+    if summary.get("wall_seconds", 0) < args.minimum_seconds or summary.get("operations", 0) <= 0 or summary.get("live_resources") != 9:
+        raise SystemExit("Benchmark duration, operations or resource invariant failed")
+    for item in records:
+        for key, value in item.items():
+            if isinstance(value, (int, float)) and not math.isfinite(value):
+                raise SystemExit(f"Nonfinite benchmark value: {key}")
+    if len(records) < 3:
+        raise SystemExit("Missing workload measurements")
+    print(f"Validated measurement structure: {summary['operations']} operations over {summary['wall_seconds']} seconds")
+
+
+if __name__ == "__main__":
+    main()
