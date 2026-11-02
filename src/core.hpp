@@ -75,6 +75,7 @@ public:
     Status valid(Owner owner, Handle handle, bool& out) const noexcept;
     Status lookup(Owner owner, Handle database, std::string_view ip, Handle& out);
     Status release(Owner owner, Handle lookup) noexcept;
+    // Internal borrowed pointer: valid only until the next service mutation.
     Status result(Owner owner, Handle handle, const Lookup*& out) const noexcept;
     Status metadata(Owner owner, Handle database, std::string& type,
                     std::string& epoch, std::int32_t& ip_version) const;

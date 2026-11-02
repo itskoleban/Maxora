@@ -118,6 +118,7 @@ Status Database::open(std::string_view path, std::shared_ptr<const Database>& ou
 
 Status Value::string(std::string_view& out) const noexcept {
     if (data.type != MMDB_DATA_TYPE_UTF8_STRING) return Status::TypeMismatch;
+    if (data.data_size > 1048575) return Status::OutOfRange;
     const std::string_view value(data.utf8_string, data.data_size);
     if (!valid_utf8(value)) return Status::InvalidUtf8;
     out = value;

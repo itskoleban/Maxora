@@ -163,6 +163,12 @@ void test_conversion() {
     EXPECT(value.string(borrowed), InvalidUtf8);
     value.data.utf8_string = "a\0b"; value.data.data_size = 3;
     EXPECT(value.string(borrowed), InvalidUtf8);
+    const std::string maximum_text(1048575, 'a');
+    value.data.utf8_string = maximum_text.data(); value.data.data_size = 1048575;
+    EXPECT(value.string(borrowed), Ok); CHECK(borrowed.size() == maximum_text.size());
+    // Reject before scanning: the backing object deliberately has one byte.
+    value.data.utf8_string = "a"; value.data.data_size = 1048576;
+    EXPECT(value.string(borrowed), OutOfRange);
     value.data.type = MMDB_DATA_TYPE_BYTES;
     const std::uint8_t bytes[] = {0, 0x7f, 0xff};
     value.data.bytes = bytes; value.data.data_size = 3;

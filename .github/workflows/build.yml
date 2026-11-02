@@ -69,6 +69,7 @@ jobs:
           name: evidence-${{ matrix.platform }}
           path: |
             runtime-evidence.json
+            runtime-evidence.log
             build/tests.xml
             build/Testing/Temporary/LastTest.log
           if-no-files-found: warn

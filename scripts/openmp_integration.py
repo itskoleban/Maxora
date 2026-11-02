@@ -5,6 +5,7 @@ The artifact under test is copied unchanged. --duration is additional sustained
 workload time AFTER lifecycle checks; --duration 86400 is the final 24-hour soak.
 """
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -75,7 +76,7 @@ def main():
     started = time.monotonic()
     try:
         (root / "work").mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="maxora-openmp-", dir=root / "work") as temporary:
+        with tempfile.TemporaryDirectory(prefix="maxora-openmp-", dir=root / "work") as temporary, contextlib.ExitStack() as shutdown:
             temporary = Path(temporary)
             if args.server_archive:
                 archive = args.server_archive.resolve()
@@ -116,13 +117,14 @@ def main():
                                    (root / "tests/pawn/side.pwn", runtime / "filterscripts/maxora_side.amx"),
                                    (root / "examples/geolocation.pwn", temporary / "geolocation.amx")):
                 compiled = subprocess.run([str(compiler), str(source), "-i" + str(root / "include"),
-                                           "-o" + str(target), "-d3", "-E+"], cwd=runtime,
+                                           "-o" + str(target), "-d3", "-E+",
+                                           "MAXORA_TEST_DURATION_MS=" + str(int(args.duration * 1000))], cwd=runtime,
                                           capture_output=True, text=True, creationflags=0x08000000 if os.name == "nt" else 0)
                 if compiled.returncode:
                     raise RuntimeError("Pawn compile failed: " + compiled.stdout + compiled.stderr)
             config = {"announce": False, "enable_query": False, "max_players": 5,
                       "name": "Maxora isolated integration", "pawn": {"main_scripts": ["maxora_test 1"],
-                      "side_scripts": ["maxora_side"], "legacy_plugins": []},
+                      "side_scripts": ["filterscripts/maxora_side"], "legacy_plugins": []},
                       "network": {"bind": "127.0.0.1", "port": 17779},
                       "artwork": {"enable": False}, "rcon": {"enable": False},
                       "logging": {"enable": True, "file": "log.txt", "use_timestamp": False}}
@@ -130,16 +132,38 @@ def main():
             if os.name != "nt":
                 server.chmod(server.stat().st_mode | 0o111)
             lines = queue.Queue()
-            proc = subprocess.Popen([str(server)], cwd=runtime, stdin=subprocess.PIPE,
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                    text=True, encoding="utf-8", errors="replace", bufsize=1,
-                                    creationflags=0x08000000 if os.name == "nt" else 0)
+            if os.name == "nt":
+                proc = subprocess.Popen([str(server)], cwd=runtime, stdin=subprocess.DEVNULL,
+                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                        text=True, encoding="utf-8", errors="replace", bufsize=1,
+                                        creationflags=0x08000000)
+                output = proc.stdout
+            else:
+                # A PTY makes libc logging line-buffered. A plain CI stdout pipe
+                # can hide startup markers until its multi-kilobyte buffer fills.
+                import pty
+                master, slave = pty.openpty()
+                proc = subprocess.Popen([str(server)], cwd=runtime, stdin=subprocess.DEVNULL,
+                                        stdout=slave, stderr=subprocess.STDOUT)
+                os.close(slave)
+                output = os.fdopen(master, "r", encoding="utf-8", errors="replace")
+                shutdown.callback(output.close)
+            def stop_process():
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait(timeout=20)
+            shutdown.callback(stop_process)
             def reader():
-                for line in proc.stdout:
-                    lines.put(line)
+                try:
+                    for line in output:
+                        lines.put(line)
+                except OSError:
+                    pass  # Linux PTY master reports EIO after the slave exits.
             threading.Thread(target=reader, daemon=True).start()
             counts = {"MAXORA_MAIN_PASS": 0, "MAXORA_AFTER_RESET_PASS": 0,
-                      "MAXORA_SIDE_PASS": 0, "MAXORA_SIDE_EXIT": 0, "MAXORA_SOAK_TICK": 0}
+                      "MAXORA_SIDE_PASS": 0, "MAXORA_SIDE_EXIT": 0, "MAXORA_SOAK_TICK": 0,
+                      "MAXORA_SIDE_CLEANUP_PASS": 0, "MAXORA_MAIN_CLEANUP_PASS": 0,
+                      "MAXORA_WORKLOAD_FINISHED": 0}
             with log_path.open("w", encoding="utf-8") as log:
                 def drain():
                     while True:
@@ -147,7 +171,7 @@ def main():
                             line = lines.get_nowait()
                         except queue.Empty:
                             return
-                        log.write(line)
+                        log.write(line.replace(str(runtime), "<runtime>"))
                         log.flush()
                         if "MAXORA_FAIL" in line:
                             raise RuntimeError(line.strip())
@@ -163,19 +187,12 @@ def main():
                         if time.monotonic() >= deadline:
                             raise RuntimeError("timeout waiting for " + marker)
                         time.sleep(0.05)
-                def command(text):
-                    proc.stdin.write(text + "\n")
-                    proc.stdin.flush()
-                wait_for("MAXORA_AFTER_RESET_PASS", 1)
-                wait_for("MAXORA_SIDE_PASS", 1)
-                command("reloadfs maxora_side")
-                wait_for("MAXORA_SIDE_PASS", 2)
-                command("unloadfs maxora_side")
-                wait_for("MAXORA_SIDE_EXIT", 2)
-                command("loadfs maxora_side")
+                # Pawn timers exercise the real command dispatch, including on
+                # Windows where hidden-process wcin may not accept pipe input.
                 wait_for("MAXORA_SIDE_PASS", 3)
-                command("gmx")
                 wait_for("MAXORA_AFTER_RESET_PASS", 2)
+                if counts["MAXORA_SIDE_CLEANUP_PASS"] < 2 or counts["MAXORA_MAIN_CLEANUP_PASS"] < 1:
+                    raise RuntimeError("script-owned resources were not proven invalid after unload")
                 workload_start = time.monotonic()
                 initial_ticks = counts["MAXORA_SOAK_TICK"]
                 samples = []
@@ -195,9 +212,10 @@ def main():
                 ticks = counts["MAXORA_SOAK_TICK"] - initial_ticks
                 if ticks < max(1, int(args.duration / 2)):
                     raise RuntimeError("insufficient completed Pawn workload markers")
-                command("exit")
                 proc.wait(timeout=20)
                 drain()
+                if counts["MAXORA_WORKLOAD_FINISHED"] != 1:
+                    raise RuntimeError("Pawn workload did not finish normally")
                 if proc.returncode != 0:
                     raise RuntimeError("unclean server exit: " + str(proc.returncode))
                 result.update(status="passed", workload_seconds=elapsed, markers=counts,

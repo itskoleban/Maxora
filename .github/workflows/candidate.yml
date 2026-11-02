@@ -84,4 +84,6 @@ jobs:
         if: always()
         with:
           name: published-rc-test-${{ matrix.platform }}
-          path: rc-runtime-evidence.json
+          path: |
+            rc-runtime-evidence.json
+            rc-runtime-evidence.log

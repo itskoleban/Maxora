@@ -11,9 +11,20 @@ def main():
     parser.add_argument("--minimum-seconds", type=float, default=0)
     args = parser.parse_args()
     records = [json.loads(line) for line in args.result.read_text(encoding="utf-8").splitlines() if line.strip()]
+    workloads = [x for x in records if x.get("kind") == "workload"]
+    expected = {"clock_pair", "ipv4_lookup_release", "ipv6_lookup_release", "missing_record", "nested_ephemeral_three_fields", "nested_reusable_three_fields", "four_databases", "load_reload_unload"}
+    if {x.get("name") for x in workloads} != expected or len(workloads) != len(expected):
+        raise SystemExit("Missing or duplicate representative workload")
+    for item in workloads:
+        if item.get("operations", 0) <= 0 or item.get("samples", 0) <= 0 or item.get("mean_ns", -1) < 0 or item.get("timed_throughput_ops_s", 0) <= 0:
+            raise SystemExit("Invalid workload measurement")
+        if not 0 <= item.get("p50_ns", -1) <= item.get("p95_ns", -1) <= item.get("p99_ns", -1):
+            raise SystemExit("Invalid workload latency percentiles")
     summary = next((x for x in records if x.get("kind") == "summary"), {})
     if summary.get("wall_seconds", 0) < args.minimum_seconds or summary.get("operations", 0) <= 0 or summary.get("live_resources") != 9:
         raise SystemExit("Benchmark duration, operations or resource invariant failed")
+    if summary["operations"] != sum(x["operations"] for x in workloads):
+        raise SystemExit("Summary/workload operation counts differ")
     for item in records:
         for key, value in item.items():
             if isinstance(value, (int, float)) and not math.isfinite(value):

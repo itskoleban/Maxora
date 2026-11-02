@@ -4,9 +4,16 @@ native print(const string[]);
 native printf(const format[], {Float,_}:...);
 native SetTimer(const function[], interval, bool:repeating);
 native SetModeRestartTime(Float:seconds);
+native SendRconCommand(const command[]);
+native SetSVarInt(const name[], value);
+native GetSVarInt(const name[]);
+#if !defined MAXORA_TEST_DURATION_MS
+    #define MAXORA_TEST_DURATION_MS 10000
+#endif
 forward OnGameModeInit();
 forward OnGameModeExit();
 forward MaxoraTick();
+forward MaxoraFinish();
 new MaxoraDb:gDatabase;
 new gTicks;
 main() {}
@@ -18,7 +25,11 @@ stock Check(bool:condition, const description[])
 public OnGameModeInit()
 {
     SetModeRestartTime(0.1);
+    new MaxoraDb:old = MaxoraDb:GetSVarInt("maxora_main_old_database");
+    if (!Check(old == MAXORA_INVALID_DB || Maxora_Unload(old) == MAXORA_INVALID_HANDLE, "gamemode resource survived unload")) return 0;
+    if (old != MAXORA_INVALID_DB) print("MAXORA_MAIN_CLEANUP_PASS");
     if (!Check(Maxora_Load("scriptfiles/decoder.mmdb", gDatabase) == MAXORA_OK, "load")) return 0;
+    SetSVarInt("maxora_main_old_database", _:gDatabase);
     new MaxoraResult:result, value, required, text[128], bool:flag, Float:number, MaxoraType:type;
     if (!Check(Maxora_Lookup(gDatabase, "1.1.1.1", result) == MAXORA_OK, "lookup")) return 0;
     Check(Maxora_GetInt(result, "/uint16", value) == MAXORA_OK && value == 100, "integer");
@@ -60,12 +71,31 @@ public MaxoraTick()
         Check(Maxora_GetInt(result, "/array/2", value) == MAXORA_OK && value == 3, "tick value");
         Check(Maxora_Release(result) == MAXORA_OK, "tick release");
     }
-    if (gTicks++ == 0) print("MAXORA_AFTER_RESET_PASS");
+    if (gTicks++ == 0) {
+        print("MAXORA_AFTER_RESET_PASS");
+        if (GetSVarInt("maxora_gmx_done") == 1)
+            SetTimer("MaxoraFinish", MAXORA_TEST_DURATION_MS + 500, false);
+    }
+    if (GetSVarInt("maxora_gmx_done") == 0) {
+        if (gTicks == 2) SendRconCommand("reloadfs maxora_side");
+        if (gTicks == 4) SendRconCommand("unloadfs maxora_side");
+        if (gTicks == 6) SendRconCommand("loadfs maxora_side");
+        if (gTicks == 8) {
+            SetSVarInt("maxora_gmx_done", 1);
+            SendRconCommand("gmx");
+        }
+    }
     if (gTicks % 10 == 0) print("MAXORA_SOAK_TICK");
     return 1;
 }
 public OnGameModeExit()
 {
     // Deliberately rely on per-script automatic cleanup.
+    return 1;
+}
+public MaxoraFinish()
+{
+    print("MAXORA_WORKLOAD_FINISHED");
+    SendRconCommand("exit");
     return 1;
 }

@@ -26,6 +26,7 @@ jobs:
           git fetch origin "refs/tags/$RC_TAG:refs/tags/$RC_TAG"
           SHA=$(git rev-parse "refs/tags/$RC_TAG^{commit}")
           git checkout --detach "$SHA"
+          git submodule update --init --recursive
           gh release download "$RC_TAG" --pattern 'Maxora-2.0.0-linux-x86.zip*' --dir dist
           python3 scripts/verify_package.py dist/Maxora-2.0.0-linux-x86.zip --commit "$SHA"
           python3 -m zipfile -e dist/Maxora-2.0.0-linux-x86.zip rc

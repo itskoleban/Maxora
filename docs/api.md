@@ -79,3 +79,5 @@ Input checks precede operations where required for memory safety; do not depend 
 `Maxora_GetCountryCode`, `Maxora_GetCityName`, `Maxora_GetSubdivisionCode` and `Maxora_GetOrganization` take `(result, destination, capacity, &required)` and delegate to GetString. City name uses English. `Maxora_GetASN(result, &value)` delegates to GetInt and may reject an ASN above signed-cell range; use GetText on `/autonomous_system_number` for its exact decimal representation. `Maxora_GetLatitude` and `Maxora_GetLongitude` take `(result, &Float:value)` and delegate to GetFloat. No helper guarantees that its field exists in any particular record. Use generic paths for alternate languages or database editions.
 
 The declarations and helper bodies are also documented in [maxora.inc](../include/maxora.inc). [geolocation.pwn](../examples/geolocation.pwn) demonstrates load, query, checked output and cleanup.
+
+String extraction is bounded to 1,048,575 database bytes before UTF-8 validation; larger strings return OUT_OF_RANGE. GetSize can inspect their length without copying. This caps selected string validation/copy work independently of the database file size.
