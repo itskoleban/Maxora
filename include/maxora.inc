@@ -1,252 +1,88 @@
-#if defined MAXORA_INCLUDED
+#if defined _maxora_included
     #endinput
 #endif
-#define MAXORA_INCLUDED
+#define _maxora_included
+#define MAXORA_VERSION "2.0.0"
+#define MAXORA_INVALID_DB (MaxoraDb:0)
+#define MAXORA_INVALID_RESULT (MaxoraResult:0)
 
-/**
- * Return Codes
- */
-#define MMDB_SUCCESS                 (1)
-#define MMDB_ERROR                   (0)
-#define MMDB_NOT_FOUND               (-1)
-#define MMDB_INVALID_HANDLE          (-2)
-#define MMDB_INVALID_PARAMS          (-3)
-#define MMDB_TYPE_MISMATCH           (-4)
+// Every native returns a MaxoraStatus. Success is 0; never test it as a bool.
+enum MaxoraStatus {
+    MAXORA_OK = 0,
+    MAXORA_INVALID_ARGUMENT, MAXORA_INVALID_HANDLE, MAXORA_WRONG_OWNER,
+    MAXORA_INVALID_IP, MAXORA_INVALID_PATH, MAXORA_OPEN_FAILED,
+    MAXORA_INVALID_DATABASE, MAXORA_UNSUPPORTED_DATABASE, MAXORA_NO_RECORD,
+    MAXORA_NO_FIELD, MAXORA_TYPE_MISMATCH, MAXORA_OUT_OF_RANGE,
+    MAXORA_BUFFER_TOO_SMALL, MAXORA_INVALID_UTF8, MAXORA_RESOURCE_LIMIT,
+    MAXORA_DECODER_ERROR, MAXORA_INTERNAL_ERROR, MAXORA_UNSUPPORTED_FAMILY
+};
+enum MaxoraType {
+    MAXORA_TYPE_STRING = 2, MAXORA_TYPE_DOUBLE = 3, MAXORA_TYPE_BYTES = 4,
+    MAXORA_TYPE_UINT16 = 5, MAXORA_TYPE_UINT32 = 6, MAXORA_TYPE_MAP = 7,
+    MAXORA_TYPE_INT32 = 8, MAXORA_TYPE_UINT64 = 9, MAXORA_TYPE_UINT128 = 10,
+    MAXORA_TYPE_ARRAY = 11, MAXORA_TYPE_BOOLEAN = 14, MAXORA_TYPE_FLOAT = 15
+};
 
-/**
- * Handle Constants
- */
-#define INVALID_MMDB_HANDLE          (MMDB:0)
+/** Resources belong to the calling script. Unload automatically frees all its
+ * databases and results. A result pins a database snapshot through reload/unload.
+ * Calls are synchronous on the server thread. Packed Pawn strings are rejected.
+ * All strings are unpacked UTF-8 bytes. No native performs DNS or downloads.
+ * Unless specified, outputs are unchanged on failure. Paths use JSON Pointer:
+ * "" is root; "/country/iso_code"; ~0 escapes ~; ~1 escapes /. */
 
-/**
- * Loads a MaxMind DB file (.mmdb) into memory.
- * 
- * @param filename  The path to the MaxMind DB file.
- * @return          A valid MMDB handle if successful, or MMDB:0 on failure.
- */
-native MMDB:MMDB_Load(const filename[]);
+/** Open local path (1..4095 bytes); set database only on success. */
+native MaxoraStatus:Maxora_Load(const path[], &MaxoraDb:database);
+/** Open replacement first; failed reload preserves existing database/results. */
+native MaxoraStatus:Maxora_Reload(MaxoraDb:database, const path[]);
+/** Invalidate database handle. Existing result snapshots remain readable. */
+native MaxoraStatus:Maxora_Unload(MaxoraDb:database);
+/** Set valid to whether database identifies a live database owned by this script. */
+native MaxoraStatus:Maxora_IsValid(MaxoraDb:database, &bool:valid);
+/** Strict numeric IPv4/IPv6; NO_RECORD differs from INVALID_IP. Release result. */
+native MaxoraStatus:Maxora_Lookup(MaxoraDb:database, const ip[], &MaxoraResult:result);
+/** Invalidate result and release its snapshot reference. */
+native MaxoraStatus:Maxora_Release(MaxoraResult:result);
+/** String extraction. capacity includes terminator; required includes terminator.
+ * BUFFER_TOO_SMALL sets required and leaves destination unchanged. No truncation.
+ * Maximum output capacity is 1048576 cells. */
+native MaxoraStatus:Maxora_GetString(MaxoraResult:result, const path[], destination[], capacity, &required);
+/** Signed 32-bit integer; larger numeric values produce OUT_OF_RANGE. */
+native MaxoraStatus:Maxora_GetInt(MaxoraResult:result, const path[], &value);
+/** MMDB float/double to finite Pawn Float; unrepresentable results fail. */
+native MaxoraStatus:Maxora_GetFloat(MaxoraResult:result, const path[], &Float:value);
+/** Extract an MMDB boolean; does not coerce integers/strings. */
+native MaxoraStatus:Maxora_GetBoolean(MaxoraResult:result, const path[], &bool:value);
+/** Integers as exact decimal text, bytes as lowercase hex. Same output contract. */
+native MaxoraStatus:Maxora_GetText(MaxoraResult:result, const path[], destination[], capacity, &required);
+/** Inspect the MMDB type; maps and arrays are inspectable. */
+native MaxoraStatus:Maxora_GetType(MaxoraResult:result, const path[], &MaxoraType:type);
+/** Map pairs / array elements / string bytes / binary bytes; otherwise TYPE_MISMATCH. */
+native MaxoraStatus:Maxora_GetSize(MaxoraResult:result, const path[], &size);
+/** Missing field succeeds with exists=false; malformed paths/decoder errors fail. */
+native MaxoraStatus:Maxora_HasField(MaxoraResult:result, const path[], &bool:exists);
+/** Prefix length normalized to the requested address family. */
+native MaxoraStatus:Maxora_GetPrefix(MaxoraResult:result, &prefix);
+/** Database edition/type string. Same required/capacity contract as GetString. */
+native MaxoraStatus:Maxora_GetDatabaseType(MaxoraDb:database, destination[], capacity, &required);
+/** Metadata build epoch as exact unsigned decimal text. */
+native MaxoraStatus:Maxora_GetBuildEpoch(MaxoraDb:database, destination[], capacity, &required);
+/** Metadata IP version (4 or 6). IPv6 databases can also contain IPv4 records. */
+native MaxoraStatus:Maxora_GetIpVersion(MaxoraDb:database, &version);
+/** Pure status explanation; no shared or per-thread last-error state. */
+native MaxoraStatus:Maxora_GetStatusMessage(MaxoraStatus:status, destination[], capacity, &required);
 
-/**
- * Unloads the specified MaxMind database from memory.
- * 
- * It is good practice to call this when your script unloads or server shuts down, 
- * although the plugin will attempt to clean up automatically.
- * 
- * @param handle    The database handle.
- */
-native MMDB_Unload(MMDB:handle);
-
-/**
- * Checks if a specific MaxMind database is currently loaded and ready to be queried.
- * 
- * @param handle    The database handle.
- * @return          True if the database is loaded, false otherwise.
- */
-native bool:MMDB_IsLoaded(MMDB:handle);
-
-/**
- * Retrieves a string value from a specific path in the MaxMind database.
- * 
- * @param handle    The database handle.
- * @param ip        The IP address to query (e.g., "8.8.8.8").
- * @param path      The dot-separated path to the data field (e.g., "country.names.en").
- * @param dest      The string array where the result will be stored.
- * @param size      The maximum size of the destination array.
- * @return          MMDB_SUCCESS on success, or an MMDB_* error code on failure.
- */
-native MMDB_GetString(MMDB:handle, const ip[], const path[], dest[], size = sizeof(dest));
-
-/**
- * Retrieves an integer value from a specific path in the MaxMind database.
- * 
- * @param handle    The database handle.
- * @param ip        The IP address to query.
- * @param path      The dot-separated path to the data field (e.g., "autonomous_system_number").
- * @param dest      The variable where the integer result will be stored (passed by reference).
- * @return          MMDB_SUCCESS on success, or an MMDB_* error code on failure.
- */
-native MMDB_GetInt(MMDB:handle, const ip[], const path[], &dest);
-
-/**
- * Retrieves a floating-point value from a specific path in the MaxMind database.
- * 
- * @param handle    The database handle.
- * @param ip        The IP address to query.
- * @param path      The dot-separated path to the data field (e.g., "location.latitude").
- * @param dest      The Float variable where the result will be stored (passed by reference).
- * @return          MMDB_SUCCESS on success, or an MMDB_* error code on failure.
- */
-native MMDB_GetFloat(MMDB:handle, const ip[], const path[], &Float:dest);
-
-/**
- * Retrieves a boolean value from a specific path in the MaxMind database.
- * 
- * @param handle    The database handle.
- * @param ip        The IP address to query.
- * @param path      The dot-separated path to the data field (e.g., "registered_country.is_in_european_union").
- * @param dest      The bool variable where the result will be stored (passed by reference).
- * @return          MMDB_SUCCESS on success, or an MMDB_* error code on failure.
- */
-native MMDB_GetBool(MMDB:handle, const ip[], const path[], &bool:dest);
-
-/**
- * Checks if a specific data field exists for the given IP address, without actually extracting the data.
- * 
- * @param handle    The database handle.
- * @param ip        The IP address to query.
- * @param path      The dot-separated path to check.
- * @param exists    Variable that will be set to true if the field exists, or false if it does not (passed by reference).
- * @return          MMDB_SUCCESS on success, or an MMDB_* error code on failure.
- */
-native MMDB_HasField(MMDB:handle, const ip[], const path[], &bool:exists);
-
-/**
- * Retrieves the routing prefix (netmask) associated with the IP address.
- * 
- * @param handle    The database handle.
- * @param ip        The IP address to query.
- * @param dest      The variable where the netmask integer (e.g. 24 for a /24 subnet) will be stored.
- * @return          MMDB_SUCCESS on success, or an MMDB_* error code on failure.
- */
-native MMDB_GetNetmask(MMDB:handle, const ip[], &dest);
-
-/**
- * Retrieves the last internal error message generated by the plugin.
- * Useful for debugging when other native functions return an MMDB_ error code.
- * 
- * @param dest      The string array where the error message will be stored.
- * @param size      The maximum size of the destination array.
- * @return          True if an error message was retrieved, false otherwise.
- */
-native bool:MMDB_GetLastError(dest[], size = sizeof(dest));
-
-// ----------------------------------------------------
-// Supported Languages in MaxMind DBs
-// Use these constants for the 'lang' parameter in helpers
-// ----------------------------------------------------
-#define MMDB_LANG_ENGLISH      "en"
-#define MMDB_LANG_GERMAN       "de"
-#define MMDB_LANG_SPANISH      "es"
-#define MMDB_LANG_FRENCH       "fr"
-#define MMDB_LANG_JAPANESE     "ja"
-#define MMDB_LANG_PORTUGUESE   "pt-BR"
-#define MMDB_LANG_RUSSIAN      "ru"
-#define MMDB_LANG_CHINESE      "zh-CN"
-
-// ----------------------------------------------------
-// Stock Helpers for common database fields (City, ASN, ISP)
-// These provide a simplified API over the generic native functions.
-// ----------------------------------------------------
-
-/**
- * Retrieves the ISO 2-letter country code for an IP.
- * 
- * @param handle    The database handle.
- * @param ip        The IP address to query.
- * @param dest      The string array where the code (e.g., "US") will be stored.
- * @param size      The maximum size of the destination array.
- * @return          MMDB_SUCCESS on success, or an MMDB_* error code on failure.
- */
-stock MMDB_GetCountryCode(MMDB:handle, const ip[], dest[], size = sizeof(dest))
-{
-    return MMDB_GetString(handle, ip, "country.iso_code", dest, size);
-}
-
-/**
- * Retrieves the country name for an IP.
- * 
- * @param handle    The database handle.
- * @param ip        The IP address to query.
- * @param dest      The string array where the name will be stored.
- * @param size      The maximum size of the destination array.
- * @param lang      The language to retrieve the name in (defaults to English). Use MMDB_LANG_* constants.
- * @return          MMDB_SUCCESS on success, or an MMDB_* error code on failure.
- */
-stock MMDB_GetCountryName(MMDB:handle, const ip[], dest[], size = sizeof(dest), const lang[] = MMDB_LANG_ENGLISH)
-{
-    new path[64];
-    format(path, sizeof(path), "country.names.%s", lang);
-    return MMDB_GetString(handle, ip, path, dest, size);
-}
-
-/**
- * Retrieves the city name for an IP.
- * 
- * @param handle    The database handle.
- * @param ip        The IP address to query.
- * @param dest      The string array where the name will be stored.
- * @param size      The maximum size of the destination array.
- * @param lang      The language to retrieve the name in (defaults to English). Use MMDB_LANG_* constants.
- * @return          MMDB_SUCCESS on success, or an MMDB_* error code on failure.
- */
-stock MMDB_GetCityName(MMDB:handle, const ip[], dest[], size = sizeof(dest), const lang[] = MMDB_LANG_ENGLISH)
-{
-    new path[64];
-    format(path, sizeof(path), "city.names.%s", lang);
-    return MMDB_GetString(handle, ip, path, dest, size);
-}
-
-/**
- * Retrieves the region/state/subdivision name for an IP (e.g., "California" or "Bavaria").
- * Usually requires the GeoLite2-City database.
- * 
- * @param handle    The database handle.
- * @param ip        The IP address to query.
- * @param dest      The string array where the name will be stored.
- * @param size      The maximum size of the destination array.
- * @param lang      The language to retrieve the name in (defaults to English). Use MMDB_LANG_* constants.
- * @return          MMDB_SUCCESS on success, or an MMDB_* error code on failure.
- */
-stock MMDB_GetRegionName(MMDB:handle, const ip[], dest[], size = sizeof(dest), const lang[] = MMDB_LANG_ENGLISH)
-{
-    new path[64];
-    format(path, sizeof(path), "subdivisions.0.names.%s", lang);
-    return MMDB_GetString(handle, ip, path, dest, size);
-}
-
-/**
- * Retrieves the ISO code of the region/state/subdivision for an IP (e.g., "CA" or "BY").
- * Usually requires the GeoLite2-City database.
- * 
- * @param handle    The database handle.
- * @param ip        The IP address to query.
- * @param dest      The string array where the code will be stored.
- * @param size      The maximum size of the destination array.
- * @return          MMDB_SUCCESS on success, or an MMDB_* error code on failure.
- */
-stock MMDB_GetRegionCode(MMDB:handle, const ip[], dest[], size = sizeof(dest))
-{
-    return MMDB_GetString(handle, ip, "subdivisions.0.iso_code", dest, size);
-}
-
-/**
- * Retrieves the Autonomous System Number (ASN) for an IP.
- * Usually requires the GeoLite2-ASN database.
- * 
- * @param handle    The database handle.
- * @param ip        The IP address to query.
- * @param dest      Variable where the ASN will be stored.
- * @return          MMDB_SUCCESS on success, or an MMDB_* error code on failure.
- */
-stock MMDB_GetASN(MMDB:handle, const ip[], &dest)
-{
-    return MMDB_GetInt(handle, ip, "autonomous_system_number", dest);
-}
-
-/**
- * Retrieves the ISP or Organization name for an IP.
- * Usually requires the GeoLite2-ASN database.
- * 
- * @param handle    The database handle.
- * @param ip        The IP address to query.
- * @param dest      The string array where the ISP name will be stored.
- * @param size      The maximum size of the destination array.
- * @return          MMDB_SUCCESS on success, or an MMDB_* error code on failure.
- */
-stock MMDB_GetISP(MMDB:handle, const ip[], dest[], size = sizeof(dest))
-{
-    // Try "isp" field first, fallback to "autonomous_system_organization" if not found.
-    new result = MMDB_GetString(handle, ip, "isp", dest, size);
-    if (result == MMDB_SUCCESS) return MMDB_SUCCESS;
-    return MMDB_GetString(handle, ip, "autonomous_system_organization", dest, size);
-}
+/** Optional edition-specific helpers return NO_FIELD if absent. */
+stock MaxoraStatus:Maxora_GetCountryCode(MaxoraResult:result, destination[], capacity, &required)
+    return Maxora_GetString(result, "/country/iso_code", destination, capacity, required);
+stock MaxoraStatus:Maxora_GetCityName(MaxoraResult:result, destination[], capacity, &required)
+    return Maxora_GetString(result, "/city/names/en", destination, capacity, required);
+stock MaxoraStatus:Maxora_GetSubdivisionCode(MaxoraResult:result, destination[], capacity, &required)
+    return Maxora_GetString(result, "/subdivisions/0/iso_code", destination, capacity, required);
+stock MaxoraStatus:Maxora_GetASN(MaxoraResult:result, &value)
+    return Maxora_GetInt(result, "/autonomous_system_number", value);
+stock MaxoraStatus:Maxora_GetOrganization(MaxoraResult:result, destination[], capacity, &required)
+    return Maxora_GetString(result, "/autonomous_system_organization", destination, capacity, required);
+stock MaxoraStatus:Maxora_GetLatitude(MaxoraResult:result, &Float:value)
+    return Maxora_GetFloat(result, "/location/latitude", value);
+stock MaxoraStatus:Maxora_GetLongitude(MaxoraResult:result, &Float:value)
+    return Maxora_GetFloat(result, "/location/longitude", value);
