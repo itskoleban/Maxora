@@ -1,55 +1,56 @@
 # Production readiness and validation report
 
-Version: 2.0.0. Current verdict: **NOT VERIFIED FOR STABLE PUBLICATION**.
+Version 2.0.0; updated November 2, 2026 (America/Bogota). Verdict: **RC validated; stable publication blocked pending continuous 24-hour soak completion and final review.**
 
-This report separates implemented validation infrastructure from results actually observed. A passing compiler invocation is not a production verdict. The machine-readable stable gate in `docs/validation/stable.json` intentionally starts unverified and publication fails closed until a maintainer supplies exact-commit evidence and review.
+## Candidate identity
 
-## Mandatory gates
+- Source: c9c5fdd7470f67a93d39afbb3be41c96922eadc3; tag v2.0.0-rc.1.
+- [Draft PR 1](https://github.com/itskoleban/Maxora/pull/1); branch rewrite/v2.0.0. Main and v1 releases remain unchanged.
+- [Published prerelease](https://github.com/itskoleban/Maxora/releases/tag/v2.0.0-rc.1).
+- [Candidate workflow 41529165013](https://github.com/itskoleban/Maxora/actions/runs/41529165013): all nine jobs passed, including tests of downloaded published artifacts on both operating systems.
+- [Checksums and artifact identity](validation/candidate-rc1.json).
 
-| Gate | Required evidence | Current status |
+## Observed gates
+
+| Gate | Actual evidence | Status |
 | --- | --- | --- |
-| Windows x86 release build | Compiler/version, full commit, successful workflow | Pending execution/result recording |
-| Linux x86 release build | Compiler/version, full commit, successful workflow | Pending execution/result recording |
-| Core and native tests | CTest log, exact configuration and fixtures | Pending execution/result recording |
-| Actual open.mp integration | Both platform logs, native assertions, gamemode/filterscript lifecycle | Pending execution/result recording |
-| ASan and UBSan | Instrumented Maxora and libmaxminddb tests/stress, zero reports | Pending Linux execution |
-| Input fuzzing | Recorded libFuzzer run duration/corpus and zero crashes | Pending Linux execution |
-| Short stress | Mixed lookup/reload workload, operation/error/resource counters | Pending execution/result recording |
-| Performance review | Raw throughput/mean/p50/p95/p99/memory evidence and reproducible environment | Pending execution/result recording |
-| Final continuous soak | At least 86,400 seconds, actual RC component, workload/environment/counters/memory | **Not executed; stable blocker** |
-| Package verification | ZIP/checksum/internal manifests, required docs/licenses/examples | Pending candidate artifact validation |
-| Published RC artifact tests | Download published packages and run actual extracted binaries on both OS | Pending RC publication/tests |
-| Security/correctness review | No unresolved critical/high findings, reviewer evidence | Pending final review |
-| Final release authorization | Complete evidence review and authorized stable workflow dispatch | Not requested while gates remain incomplete |
+| Windows x86 release build | Candidate workflow, compiled module, executed tests | Passed |
+| Linux x86 release build | Candidate workflow, compiled module, executed tests | Passed |
+| Unit and native-boundary tests | Actual CTest on both OS and x64 development configurations | Passed |
+| Actual open.mp integration | Official v1.6.7.3218, compiled 32-bit-cell Pawn, 19 natives, both OS | Passed |
+| Lifecycle and resource cleanup | Real filterscript reload/unload/load and GMX; old handles invalidated; snapshots retained | Passed |
+| ASan and UBSan | Instrumented core/database CTest and 30-second stress on Linux | Passed |
+| Parser/native input fuzzing | Two coverage-guided 60-second libFuzzer runs with raw logs; no reported crashes | Passed |
+| Short stress | 60-second mixed benchmark and actual server workloads | Passed |
+| Performance evidence review | Pinned fixtures; real timings and memory; [local five-trial review](validation/benchmark-review.md) and [candidate evidence](validation/rc1-benchmark/) | Passed for documented synthetic workload |
+| Examples/docs/package verification | Compiled example, 59-member packages, SHA-256/internal manifest and dependency licenses | Passed |
+| Published RC artifact tests | Downloaded ZIPs, verified source/member hashes, loaded extracted DLL/SO in actual servers | Passed |
+| Bounded correctness/security review | [Findings and fixes](validation/security-review.md); no additional reportable critical/high issue identified | Passed within documented scope |
+| Continuous final soak | Actual published Windows DLL; target 86,400 continuous workload seconds | **Running; not passed** |
+| Final production review/authorization | Requires completed soak evidence and final reviewed stable gate | **Pending** |
 
-## Evidence policy
+Local Windows x86 final CTest observed 1,604,055 core checks and 91 native checks. The 18 Python release-tool regression tests also pass in the candidate workflow. No proprietary or GeoLite database was used; fixtures are synthetic and redistributable.
 
-Record the exact source commit and recursive dependency commits for every run. The Windows and Linux component tests must use the binaries that are packaged. Candidate tests download the published ZIP, validate SHA-256 and manifest, and run the extracted component. Stable publication downloads and verifies the same candidate bytes; it does not rebuild them.
+The completed pre-candidate [run 41528397618](https://github.com/itskoleban/Maxora/actions/runs/41528397618) is preserved under [ci-5b6c900](validation/ci-5b6c900/). It completed 7,041,343 parser fuzz inputs and 343,015 native fuzz inputs in 61 seconds each. Earlier failed runtime jobs remain failed: test-harness script paths/command delivery/stdout buffering and default 64-bit Pawn compiler cells were corrected before successful validation. Failures were not bypassed.
 
-The optional `Continuous 24-hour candidate soak` workflow needs an existing trusted self-hosted Linux runner labelled `maxora-soak`. GitHub-hosted jobs have a six-hour execution limit. Do not represent separate short jobs as one continuous 24-hour process. If no suitable machine is available, preserve the candidate and leave stable blocked; follow the development guide to reproduce the test on existing resources.
+## Final soak now executing
 
-`docs/validation/stable.json` requires commit-bound passed records for all gate names defined in `scripts/release_gate.py`, a continuous soak duration of at least 86,400 seconds with environment/workload/evidence, zero unresolved critical/high issues, reviewer identity and review time. A maintainer must inspect evidence contents; nonempty links are not independent proof. Configure the repository's `production` environment with required reviewers where available; this workflow file alone cannot establish that repository setting.
+The independent background runner started November 2 at 21:38:11 UTC, 16:38:11 America/Bogota, using the downloaded published candidate DLL with SHA-256 2954df7df59969fb99a8bde6b16bca3333413fc492ce6fcf366aef75f7d11112. Normal completion is expected after November 3 at about 16:38 America/Bogota if the machine remains available. [Start metadata](validation/soak-start.json) binds package, binary, harness, runtime and fixture hashes. Startup lifecycle checks and fresh sustained workload markers were verified.
 
-## Known limits
+Workload: every 100 ms, 30 IPv4 lookup/get/release operations plus missing field, IPv6 lookup/prefix/release and missing IPv4 record; every ten ticks, successful and failed reload, unload/replacement and retained-snapshot checks. Nominal load is 957 native calls/second. Resident server memory is sampled once per second. Final elapsed duration, completed markers, minimum operations, errors, memory and exit status will be recorded by the harness.
 
-Only synchronous main-thread callers are supported. Database open does not exhaustively decode the entire file. Trusted files must remain immutable while mapped. Database paths are operator-controlled, not sandboxed. Packed Pawn strings are rejected. Pawn integers are signed 32-bit; wider integers require text extraction. UTF-8 output is checked and strings are never silently truncated. Resource/generation budgets are finite and slots retire rather than allow stale-handle reuse. See architecture and API documentation for limits and lifecycle details.
+Local status: outputs/Maxora-rc1-24h-soak.status.json; final result: outputs/Maxora-rc1-24h-soak.json; workload log: outputs/Maxora-rc1-24h-soak.log. These are local workspace outputs, not completed evidence. A machine shutdown, interrupted process or insufficient duration must fail the gate; separate short runs cannot be stitched into one continuous run.
 
-Actual build logs, benchmark figures, commit references, PR links and workflow results must be added as they become available. Unexecuted work must remain labelled pending or blocked.
+The first broad automation request was rejected by automatic approval review because it included persistent documentation/GitHub mutations. The user then explicitly authorized a narrower read-only hourly monitor for a maximum of 26 runs. That monitor is active as maxora-rc-soak-read-only-monitor and only observes/notifies on completion, failure or required intervention. It cannot restart the test, modify files/GitHub or publish a release.
 
-## Validation observed during implementation
+## Performance evidence and limits
 
-Windows x86 Release built with MSVC 19.51.36248.0 and Windows SDK 10.0.26100.0, with warnings treated as errors. CTest passed core (1,604,055 checks, 4.29s) and pawn_boundary (91 checks, 0.04s). The 18 Python release-tool tests passed. Local official open.mp runtime tests passed both a 60-second initial workload and an expanded 30-second mixed workload, including real script-owned stale-handle cleanup across filterscript reload and GMX. Raw evidence: [mixed runtime](validation/windows-x86-runtime-mixed.json), [initial 60s](validation/windows-x86-runtime.json).
+The actual candidate's core-only x64 hosted benchmark ran on a 4-vCPU AMD EPYC 9V74 Ubuntu runner. Its 60-second mixed run completed 10,768,416 measured operations, with nine retained resources. The 100,000-operation/workload trial measured IPv4 mean 394.249 ns (p50 381, p95 441, p99 581) and IPv6 mean 793.391 ns (p50 772, p95 831, p99 951). These are tiny synthetic-fixture service operations, including a clock-floor workload and mapping-lifecycle work in total throughput; they are not an in-server player capacity claim. Full environment, raw metrics and source pins are in [rc1-benchmark](validation/rc1-benchmark/). CPU allocation, data size, cache warmth and toolchain differ from the local x86 trials, so cross-run speed comparisons are not justified. Allocation counts are unmeasured. Linux current/peak RSS are approximate separate kernel measurements; sanitizer memory includes instrumentation overhead.
 
-These local runs occurred during working-tree development and are not final RC qualification. Raw benchmark data and five-trial statistics are reviewed in [benchmark-review.md](validation/benchmark-review.md). Bounded source review findings and fixes are in [security-review.md](validation/security-review.md).
+Only synchronous main-thread callers are supported. Open does not exhaustively decode or authenticate a database. Mappings must remain immutable; deploy versioned replacement filenames. Packed Pawn strings are rejected; source-level array bounds cannot be discovered at runtime. Integer/float conversion and handle/resource lifetime limits are explicit. See the specification/API/security guides.
 
-GitHub validation for commit 5b6c9005c21bfa0adb2bea734d8192e87c36d0f3 is tracked in [run 41528397618](https://github.com/itskoleban/Maxora/actions/runs/41528397618). Record the completed conclusion and any later candidate run separately. Earlier failed runtime jobs were correctly left failed; the harness/compiler setup was corrected (script paths, portable timer-driven commands, Unix output buffering and explicit 32-bit Pawn compiler cells). Neither those failures nor an in-progress run count as passed gates.
+## Stable publication gate
 
-## Completed CI validation before candidate creation
+[stable.json](validation/stable.json) records the exact candidate commit, passed gates and independently verified package hashes, while leaving soak running and final review unset. Executing release_gate.py correctly blocks on those remaining requirements. Stable publication checks a successful candidate workflow including artifact tests and promotes the same verified package bytes without rebuilding. The final stable tag will be v2.0.0 only after every requirement is demonstrated and authorized. No stable tag, stable release or merge has occurred.
 
-[Run 41528397618](https://github.com/itskoleban/Maxora/actions/runs/41528397618) passed every mandatory job for source commit `5b6c9005c21bfa0adb2bea734d8192e87c36d0f3`. Both Windows x86 and Linux x86 compiled, executed core/native tests, compiled 32-bit-cell Pawn scripts with the pinned compiler, loaded the actual module in official open.mp v1.6.7.3218, proved filterscript/GMX cleanup, ran the mixed workload and shut down cleanly. Both validated builds were packaged successfully.
-
-Linux ASan/UBSan CTest and 30-second mixed stress passed. Parser fuzzing completed 7,041,343 runs in 61 seconds; native-boundary fuzzing completed 343,015 runs in 61 seconds. No sanitizer diagnostic/crash was reported. The uninstrumented 60-second mixed benchmark completed 10,537,432 measured operations with nine retained resources. These operations include a clock-floor workload and mapping lifecycle work and are not all IP lookups. No controlled comparison to v1 was performed. Allocation counts were not instrumented.
-
-Selected raw evidence is retained under [ci-5b6c900](validation/ci-5b6c900/), together with the full downloadable workflow artifacts. Linux RSS/peak values are separate approximate kernel measurements; sanitizer working set includes sanitizer overhead and is not a production-memory estimate. Local benchmark results remain development measurements with the provenance limits stated in their review.
-
-This successful pre-candidate run does not complete the final 24-hour soak or prove the bytes of a future candidate release. The candidate workflow must independently pass, publish explicitly marked prerelease packages, download them and test those extracted binaries. Stable remains blocked.
+The self-hosted Linux soak workflow remains available for an existing suitable runner; GitHub-hosted jobs have a six-hour limit. The currently executing test uses the available local Windows resource instead of purchasing infrastructure. The [full engineering report](validation/engineering-report.md) covers architecture, API, dependencies, test results, benchmark caveats and delivery references.
