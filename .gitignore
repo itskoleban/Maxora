@@ -1,34 +1,7 @@
-# ==========================
-# Editor / Formatting
-# ==========================
-.prettierignore
-.clang-format
-
-# ==========================
-# Documentation / Notes
-# ==========================
-README.dev.md
-
-# ==========================
-# Build directories
-# ==========================
-build/
-build32/
+build*/
 cmake-build-*/
 out/
-
-# ==========================
-# Logs / Temporary files
-# ==========================
-*.log
-*.tmp
-*.bak
-*.orig
-*.rej
-
-# ==========================
-# C/C++ Build artifacts
-# ==========================
+lib/pawn-natives/
 *.obj
 *.o
 *.a
@@ -36,28 +9,17 @@ out/
 *.pdb
 *.ilk
 *.exp
-
-# ==========================
-# Compiled binaries
-# ==========================
 *.exe
 *.dll
 *.so
 *.dylib
-
-# ==========================
-# IDEs and Editors
-# ==========================
-.vscode/
+*.log
+*.tmp
+*.amx
 .vs/
+.vscode/
 .idea/
-*.suo
-*.user
-*.sln
-compile_commands.json
-
-# ==========================
-# OS Generated Files
-# ==========================
+__pycache__/
+*.pyc
 .DS_Store
 Thumbs.db
