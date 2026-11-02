@@ -1,0 +1,38 @@
+Date: 2026-11-02 (America/Bogota)
+Build: Release, Visual Studio Win32, warnings as errors and /guard:cf
+Architecture: Windows x86 core benchmark (no open.mp runtime in this benchmark)
+OS: Microsoft Windows NT 10.0.26300.0
+CPU: Intel64 Family 6 Model 186 Stepping 2, GenuineIntel
+Logical processors: 12
+Compiler: MSVC as recorded by build-win32/CMakeFiles/*/CMakeCXXCompiler.cmake; SDK 10.0.26100.0
+Five trials: maxora_benchmark --iterations 1000
+Paced stability: maxora_benchmark --seconds 60 --rate 1000
+Runs executed outside restricted sandbox. Concurrent engineering activity; synthetic fixtures, small sample, no v1 comparison.
+Source base (working tree has uncommitted v2 implementation):
+fd1f134703f2915a9297e88469e2d1cea5f74edd
+libmaxminddb SHA:
+4a3d17a621c0ebcb81498fd34d313f67fd940ab5
+MMDB fixtures SHA:
+dc32db5525f9c42ab7006ab3f13c69330b814dd1
+
+set(CMAKE_CXX_COMPILER_ID "MSVC")
+set(CMAKE_CXX_COMPILER_VERSION "19.51.36248.0")
+set(CMAKE_CXX_COMPILER_VERSION_INTERNAL "")
+set(CMAKE_CXX_COMPILER_ARCHITECTURE_ID "X86")
+set(CMAKE_CXX_COMPILER_ID_RUN 1)
+
+
+
+Path : C:\Users\esteb\Documents\Codex\2026-11-02\project-maxora-2-0-complete-ground\work\Maxora\build-win32\Release\maxora_benchmark.exe
+Hash : BF3B88211C6F313E4296AECA2160ED0FC6963261C2962F416F9317F07BECE179
+
+Path : C:\Users\esteb\Documents\Codex\2026-11-02\project-maxora-2-0-complete-ground\work\Maxora\src\core.cpp
+Hash : BD3EF813DA5777B183FBD6ECFF12A1A29E86A7439746317D5D4951B750B1C1C1
+
+Path : C:\Users\esteb\Documents\Codex\2026-11-02\project-maxora-2-0-complete-ground\work\Maxora\src\core.hpp
+Hash : AB5C0D3B7E594CF5C442D2A6E12B769A62AF075FA2D3DC0008C2CB38BD853BB1
+
+Path : C:\Users\esteb\Documents\Codex\2026-11-02\project-maxora-2-0-complete-ground\work\Maxora\benchmarks\benchmark.cpp
+Hash : 12844CF5DC83F3276004EBA2A8154E7842FC744128D07070EA31707D9FA14BC0
+
+

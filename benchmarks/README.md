@@ -58,3 +58,6 @@ performance baseline. Synthetic fixtures are small and cache-friendly; these
 measurements establish behavior for this workload, not real-world GeoIP capacity.
 No v1 speed comparison is claimed. A completed 60-second run is not a completed
 24-hour soak or open.mp runtime integration test.
+
+See the [local measurement review](../docs/validation/benchmark-review.md) for
+the recorded five Windows x86 trials, short paced run and their limitations.

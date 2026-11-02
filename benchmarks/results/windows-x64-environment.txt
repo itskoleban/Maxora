@@ -13,3 +13,24 @@ warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 cmake version 4.3.4
 
 CMake suite maintained and supported by Kitware (kitware.com/cmake).
+Source base (working tree has uncommitted v2 implementation):
+d2260b0e2c8a1d922d2bc00605e933f94d8a8296
+libmaxminddb SHA:
+4a3d17a621c0ebcb81498fd34d313f67fd940ab5
+MMDB fixtures SHA:
+dc32db5525f9c42ab7006ab3f13c69330b814dd1
+
+Path : C:\Users\esteb\Documents\Codex\2026-11-02\project-maxora-2-0-complete-ground\work\Maxora\build-core\maxora_benchmark.exe
+Hash : 495FEB961C79CF9E4002886BBB4E9725628A781DCD24A57B03CB875FDD40FFFF
+
+Path : C:\Users\esteb\Documents\Codex\2026-11-02\project-maxora-2-0-complete-ground\work\Maxora\src\core.cpp
+Hash : 0EC991194B4D381169D438FE3479D573C2569BCBB9F2EC38AF798744514172EA
+
+Path : C:\Users\esteb\Documents\Codex\2026-11-02\project-maxora-2-0-complete-ground\work\Maxora\src\core.hpp
+Hash : 63D02AD696DBCF5755EB10E02D066D269B2A8A03EA50CD29BE49D11B03CFAE99
+
+Path : C:\Users\esteb\Documents\Codex\2026-11-02\project-maxora-2-0-complete-ground\work\Maxora\benchmarks\benchmark.cpp
+Hash : 12844CF5DC83F3276004EBA2A8154E7842FC744128D07070EA31707D9FA14BC0
+
+Path : C:\Users\esteb\Documents\Codex\2026-11-02\project-maxora-2-0-complete-ground\work\Maxora\tests\core_tests.cpp
+Hash : 0E5395475F3FE819E7877852D363C27E5C798FD78CB62F71E497D481B527D30E

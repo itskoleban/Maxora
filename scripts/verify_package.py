@@ -28,6 +28,11 @@ def main():
             require(not name.startswith("/") and ".." not in pathlib.PurePosixPath(name).parts and "\\" not in name and ":" not in name, "Unsafe archive member")
         manifest = json.loads(archive.read("manifest.json"))
         require(manifest["version"] == "2.0.0" and manifest["commit"] == args.commit, "Wrong version/commit")
+        platform = manifest.get("platform")
+        require(platform in {"windows-x86", "linux-x86"}, "Unsupported package platform")
+        binary = "Maxora.dll" if platform == "windows-x86" else "Maxora.so"
+        required = {f"components/{binary}", "include/maxora.inc", "LICENSE", "README.md", "CHANGELOG.md", "docs/production-readiness.md", "docs/api.md", "examples/geolocation.pwn", "licenses/libmaxminddb/LICENSE", "licenses/libmaxminddb/NOTICE", "licenses/open.mp-sdk/LICENSE.md"}
+        require(required.issubset(set(names)), "Required package binary, API, example, documentation or license missing")
         require(set(names) == set(manifest["files"]) | {"manifest.json"}, "Manifest member set mismatch")
         for name, checksum in manifest["files"].items():
             require(hashlib.sha256(archive.read(name)).hexdigest() == checksum, f"Member mismatch: {name}")

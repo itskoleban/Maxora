@@ -50,5 +50,7 @@ jobs:
           name: continuous-soak-evidence
           path: |
             runtime-soak.json
+            runtime-soak.log
             pre-soak-runtime.json
+            pre-soak-runtime.log
             pre-soak-stress.jsonl

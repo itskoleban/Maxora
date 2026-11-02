@@ -18,7 +18,7 @@ def main():
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     epoch = int(subprocess.check_output(["git", "show", "-s", "--format=%ct", "HEAD"], cwd=root, text=True))
     binary = "Maxora.dll" if args.platform.startswith("windows") else "Maxora.so"
-    required = [f"components/{binary}", "include/maxora.inc", "LICENSE", "README.md", "CHANGELOG.md", "docs/production-readiness.md", "licenses/libmaxminddb/LICENSE"]
+    required = [f"components/{binary}", "include/maxora.inc", "LICENSE", "README.md", "CHANGELOG.md", "docs/production-readiness.md", "docs/api.md", "examples/geolocation.pwn", "licenses/libmaxminddb/LICENSE", "licenses/libmaxminddb/NOTICE", "licenses/open.mp-sdk/LICENSE.md"]
     for path in required:
         if not (args.stage / path).is_file():
             raise SystemExit(f"Missing package input: {path}")

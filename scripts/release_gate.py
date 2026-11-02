@@ -1,6 +1,7 @@
 """Fail closed unless reviewed, commit-bound production evidence is complete."""
 import argparse
 import json
+import math
 import pathlib
 import re
 
@@ -19,7 +20,9 @@ def check(report, commit):
         if item.get("status") != "passed" or not item.get("evidence") or item.get("source_commit") != commit:
             failures.append(f"{key}: missing passed evidence bound to release commit")
     soak = report.get("soak", {})
-    if soak.get("status") != "passed" or soak.get("source_commit") != commit or soak.get("duration_seconds", 0) < 86400 or not all(soak.get(key) for key in ("environment", "workload", "evidence")):
+    duration = soak.get("duration_seconds", 0)
+    duration_valid = isinstance(duration, (int, float)) and not isinstance(duration, bool) and math.isfinite(duration) and duration >= 86400
+    if soak.get("status") != "passed" or soak.get("source_commit") != commit or not duration_valid or not all(soak.get(key) for key in ("environment", "workload", "evidence")):
         failures.append("24-hour continuous soak has not passed with environment, workload and evidence")
     if report.get("unresolved_critical_high") != 0:
         failures.append("security/correctness critical/high review incomplete or unresolved")

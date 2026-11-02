@@ -15,6 +15,17 @@ jobs:
           persist-credentials: false
       - run: cmake -S . -B build -G Ninja -DMAXORA_BUILD_COMPONENT=OFF -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build --parallel 2
+      - name: Record benchmark environment
+        run: |
+          {
+            uname -a
+            lscpu
+            free -b
+            cmake --version
+            c++ --version
+            git rev-parse HEAD
+            git submodule status --recursive
+          } > benchmark-environment.txt
       - run: build/maxora_benchmark --iterations 100000 > benchmark.jsonl
       - run: python scripts/check_benchmark.py benchmark.jsonl
       - run: build/maxora_benchmark --seconds 60 > stress.jsonl
@@ -25,3 +36,4 @@ jobs:
           path: |
             benchmark.jsonl
             stress.jsonl
+            benchmark-environment.txt

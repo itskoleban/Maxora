@@ -43,6 +43,11 @@ class ReleaseGateTests(unittest.TestCase):
     def test_wrong_commit_is_rejected(self):
         self.assertTrue(GATE.check(self.report, "b" * 40))
 
+    def test_nonfinite_soak_duration_is_rejected(self):
+        for duration in (float("nan"), float("inf"), -1, "86400", True):
+            self.report["soak"]["duration_seconds"] = duration
+            self.assertTrue(GATE.check(self.report, self.commit))
+
     def test_unreviewed_package_digest_is_rejected(self):
         del self.report["package_sha256"]["linux-x86"]
         self.assertTrue(GATE.check(self.report, self.commit))
@@ -63,9 +68,11 @@ class PackageVerificationTests(unittest.TestCase):
         self.archive = pathlib.Path(self.directory.name) / "package.zip"
         self.commit = "a" * 40
 
-    def package(self, files=None, version="2.0.0", bad_hash=False):
-        files = files or {"components/Maxora.so": b"synthetic-binary", "include/maxora.inc": b"include"}
-        manifest = {"version": version, "commit": self.commit, "files": {key: hashlib.sha256(value).hexdigest() for key, value in files.items()}}
+    def package(self, files=None, version="2.0.0", bad_hash=False, platform="linux-x86"):
+        if files is None:
+            paths = ("components/Maxora.so", "include/maxora.inc", "LICENSE", "README.md", "CHANGELOG.md", "docs/production-readiness.md", "docs/api.md", "examples/geolocation.pwn", "licenses/libmaxminddb/LICENSE", "licenses/libmaxminddb/NOTICE", "licenses/open.mp-sdk/LICENSE.md")
+            files = {path: b"synthetic-test-content" for path in paths}
+        manifest = {"version": version, "commit": self.commit, "platform": platform, "files": {key: hashlib.sha256(value).hexdigest() for key, value in files.items()}}
         if bad_hash:
             manifest["files"][next(iter(files))] = "0" * 64
         with zipfile.ZipFile(self.archive, "w") as archive:
@@ -99,6 +106,14 @@ class PackageVerificationTests(unittest.TestCase):
 
     def test_wrong_version_is_rejected(self):
         self.package(version="1.1.1")
+        self.assertNotEqual(self.verify().returncode, 0)
+
+    def test_missing_required_files_is_rejected(self):
+        self.package(files={"components/Maxora.so": b"binary"})
+        self.assertNotEqual(self.verify().returncode, 0)
+
+    def test_wrong_platform_is_rejected(self):
+        self.package(platform="windows-x86")
         self.assertNotEqual(self.verify().returncode, 0)
 
     def test_wrong_commit_is_rejected(self):
