@@ -30,11 +30,15 @@ struct Vm {
         data[static_cast<std::size_t>(at) / 4 + text.size()] = 0;
     }
     Status call(const char* name, std::initializer_list<cell> args) {
-        std::vector<cell> params{static_cast<cell>(args.size() * 4)};
-        params.insert(params.end(), args);
+        const auto start = static_cast<std::size_t>(amx.stk) / sizeof(cell);
+        if (args.size() + 1 > data.size() - start) throw std::runtime_error("test argument block exceeds VM stack");
+        auto* params = data.data() + start;
+        params[0] = static_cast<cell>(args.size() * sizeof(cell));
+        std::size_t index = 1;
+        for (const auto argument : args) params[index++] = argument;
         for (int i = 0; i < native_count(); ++i)
             if (std::strcmp(native_table()[i].name, name) == 0)
-                return static_cast<Status>(native_table()[i].func(&amx, params.data()));
+                return static_cast<Status>(native_table()[i].func(&amx, params));
         throw std::runtime_error("native missing");
     }
 };
@@ -52,6 +56,18 @@ int main() {
             CHECK(a.call(native_table()[i].name, {}) == Status::InvalidArgument);
         }
         CHECK(native_count() == 19);
+        // The claimed count cannot authorize reading beyond the actual AMX
+        // allocation, into the heap/stack gap, or from a foreign pointer.
+        const auto& is_valid = native_table()[3];
+        CHECK(std::strcmp(is_valid.name, "Maxora_IsValid") == 0);
+        a.data.back() = 2 * static_cast<cell>(sizeof(cell));
+        CHECK(static_cast<Status>(is_valid.func(&a.amx, a.data.data() + a.data.size() - 1)) == Status::InvalidArgument);
+        a.data[4095] = 2 * static_cast<cell>(sizeof(cell));
+        CHECK(static_cast<Status>(is_valid.func(&a.amx, a.data.data() + 4095)) == Status::InvalidArgument);
+        const std::array<cell, 3> foreign_params{8, 0, 0};
+        CHECK(static_cast<Status>(is_valid.func(&a.amx, foreign_params.data())) == Status::InvalidArgument);
+        const auto* misaligned = reinterpret_cast<const cell*>(reinterpret_cast<const unsigned char*>(a.data.data()) + 1);
+        CHECK(static_cast<Status>(is_valid.func(&a.amx, misaligned)) == Status::InvalidArgument);
         const auto path = (std::filesystem::path(MAXORA_FIXTURE_DIR) / "MaxMind-DB-test-decoder.mmdb").string();
         a.string(0, path);
         CHECK(a.call("Maxora_Load", {0, 4096}) == Status::Ok);

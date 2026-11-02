@@ -47,7 +47,7 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure --output-junit tests.xml
       - name: Compile pinned Pawn compiler
         run: |
-          cmake -S lib/compiler/source/compiler -B build-pawn -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake -S lib/compiler/source/compiler -B build-pawn -DCMAKE_C_FLAGS=-DPAWN_CELL_SIZE=32 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
           cmake --build build-pawn --config Release --parallel 2 --target pawncc
       - name: Obtain digest-pinned official server
         run: python scripts/download_runtime.py --platform ${{ matrix.platform }} --out ${{ matrix.runtime }}

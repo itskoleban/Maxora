@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import queue
 import shutil
+import struct
 import subprocess
 import tarfile
 import tempfile
@@ -70,7 +71,7 @@ def main():
     result = {"status": "failed", "component_sha256": sha256(args.component),
               "requested_workload_seconds": args.duration,
               "runtime": "open.mp v1.6.7.3218", "platform": os.name,
-              "log": log_path.name, "workload": "30 lookup/get/release iterations every 100 ms; nominal 900 native operations/s",
+              "log": log_path.name, "workload": "Every 100ms: 30 IPv4 lookup/get/release, missing field, IPv6 lookup/prefix/release, missing IPv4; every 10 ticks reload/failure/unload/replacement/snapshot (nominal 957 native operations/s)",
               "memory_measurement": "resident process memory sampled once per second; not an allocation count"}
     proc = None
     started = time.monotonic()
@@ -112,6 +113,7 @@ def main():
             assert sha256(artifact) == result["component_sha256"]
             fixture = root / "lib/libmaxminddb/t/maxmind-db/test-data"
             shutil.copy2(fixture / "MaxMind-DB-test-decoder.mmdb", runtime / "scriptfiles/decoder.mmdb")
+            shutil.copy2(fixture / "MaxMind-DB-test-ipv4-24.mmdb", runtime / "scriptfiles/ipv4.mmdb")
             shutil.copy2(fixture / "MaxMind-DB-test-ipv6-24.mmdb", runtime / "scriptfiles/ipv6.mmdb")
             for source, target in ((root / "tests/pawn/integration.pwn", runtime / "gamemodes/maxora_test.amx"),
                                    (root / "tests/pawn/side.pwn", runtime / "filterscripts/maxora_side.amx"),
@@ -122,6 +124,9 @@ def main():
                                           capture_output=True, text=True, creationflags=0x08000000 if os.name == "nt" else 0)
                 if compiled.returncode:
                     raise RuntimeError("Pawn compile failed: " + compiled.stdout + compiled.stderr)
+                header = target.read_bytes()[:6]
+                if len(header) != 6 or struct.unpack_from("<H", header, 4)[0] != 0xF1E0:
+                    raise RuntimeError("Pawn compiler emitted a non-32-bit AMX; build it with PAWN_CELL_SIZE=32")
             config = {"announce": False, "enable_query": False, "max_players": 5,
                       "name": "Maxora isolated integration", "pawn": {"main_scripts": ["maxora_test 1"],
                       "side_scripts": ["filterscripts/maxora_side"], "legacy_plugins": []},
@@ -220,7 +225,7 @@ def main():
                     raise RuntimeError("unclean server exit: " + str(proc.returncode))
                 result.update(status="passed", workload_seconds=elapsed, markers=counts,
                               minimum_completed_iterations=ticks * 300,
-                              minimum_completed_native_operations=ticks * 900,
+                              minimum_completed_native_operations=ticks * 950,
                               resident_memory_samples=len(samples),
                               first_resident_bytes=samples[0] if samples else None,
                               last_resident_bytes=samples[-1] if samples else None,

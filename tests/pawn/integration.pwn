@@ -15,6 +15,7 @@ forward OnGameModeExit();
 forward MaxoraTick();
 forward MaxoraFinish();
 new MaxoraDb:gDatabase;
+new MaxoraDb:gIPv4, MaxoraDb:gIPv6;
 new gTicks;
 main() {}
 stock Check(bool:condition, const description[])
@@ -59,6 +60,8 @@ public OnGameModeInit()
     Check(Maxora_Unload(v6) == MAXORA_OK, "unload");
     Check(Maxora_GetPrefix(result, value) == MAXORA_OK, "snapshot after unload");
     Check(Maxora_Release(result) == MAXORA_OK, "v6 release");
+    Check(Maxora_Load("scriptfiles/ipv4.mmdb", gIPv4) == MAXORA_OK, "sustained v4 load");
+    Check(Maxora_Load("scriptfiles/ipv6.mmdb", gIPv6) == MAXORA_OK, "sustained v6 load");
     print("MAXORA_MAIN_PASS");
     SetTimer("MaxoraTick", 100, true);
     return 1;
@@ -69,7 +72,26 @@ public MaxoraTick()
         new MaxoraResult:result, value;
         if (!Check(Maxora_Lookup(gDatabase, "1.1.1.1", result) == MAXORA_OK, "tick lookup")) return 0;
         Check(Maxora_GetInt(result, "/array/2", value) == MAXORA_OK && value == 3, "tick value");
+        if (i == 0) {
+            new bool:exists;
+            Check(Maxora_HasField(result, "/missing", exists) == MAXORA_OK && !exists, "tick missing field");
+        }
         Check(Maxora_Release(result) == MAXORA_OK, "tick release");
+    }
+    new MaxoraResult:v6Result, MaxoraResult:missing, prefix;
+    Check(Maxora_Lookup(gIPv6, "::2:0:1a", v6Result) == MAXORA_OK, "tick v6");
+    Check(Maxora_GetPrefix(v6Result, prefix) == MAXORA_OK && prefix == 122, "tick v6 prefix");
+    Check(Maxora_Release(v6Result) == MAXORA_OK, "tick v6 release");
+    Check(Maxora_Lookup(gIPv4, "2.3.4.5", missing) == MAXORA_NO_RECORD, "tick missing record");
+    if (gTicks % 10 == 0) {
+        Check(Maxora_Reload(gDatabase, "scriptfiles/decoder.mmdb") == MAXORA_OK, "tick reload");
+        Check(Maxora_Reload(gDatabase, "scriptfiles/missing.mmdb") == MAXORA_OPEN_FAILED, "tick failed reload");
+        new MaxoraResult:snapshot;
+        Check(Maxora_Lookup(gIPv4, "1.1.1.3", snapshot) == MAXORA_OK, "tick snapshot");
+        Check(Maxora_Unload(gIPv4) == MAXORA_OK, "tick unload");
+        Check(Maxora_Load("scriptfiles/ipv4.mmdb", gIPv4) == MAXORA_OK, "tick replacement load");
+        Check(Maxora_GetPrefix(snapshot, prefix) == MAXORA_OK && prefix == 31, "tick snapshot after unload");
+        Check(Maxora_Release(snapshot) == MAXORA_OK, "tick snapshot release");
     }
     if (gTicks++ == 0) {
         print("MAXORA_AFTER_RESET_PASS");

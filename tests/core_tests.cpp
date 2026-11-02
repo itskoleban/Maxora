@@ -221,6 +221,19 @@ void test_real_types() {
 
 void test_ip_databases() {
     Service service;
+    // A valid IPv6 record can cover all embedded IPv4 addresses at a prefix
+    // shorter than 96. Upstream's IPv4-start-cache regression fixture covers it.
+    const auto broad = load(service, 1, "MaxMind-DB-no-ipv4-search-tree.mmdb");
+    for (const char* ip : {"1.1.1.1", "255.255.255.255"}) {
+        const auto handle = lookup(service, 1, broad, ip);
+        const auto& found = result(service, 1, handle);
+        CHECK(found.prefix == 0);
+        std::string_view text;
+        EXPECT(field(found, "").string(text), Ok);
+        CHECK(!text.empty());
+        EXPECT(service.release(1, handle), Ok);
+    }
+    service.clear();
     for (const char* size : {"24", "28", "32"}) {
         for (const char* family : {"ipv4", "mixed"}) {
             const std::string name = std::string("MaxMind-DB-test-") + family + "-" + size + ".mmdb";

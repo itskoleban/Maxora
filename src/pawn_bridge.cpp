@@ -13,6 +13,21 @@ static_assert(sizeof(cell) == 4, "Maxora's Pawn ABI requires 32-bit cells");
 class Memory {
 public:
     explicit Memory(AMX* amx) : amx_(amx) {}
+    bool parameters(const cell* pointer, std::size_t count) const noexcept {
+        if (!amx_ || !pointer) return false;
+        unsigned char* data = amx_->data;
+        if (!data && amx_->base) {
+            const auto* header = reinterpret_cast<const AMX_HEADER*>(amx_->base);
+            if (header->dat < 0) return false;
+            data = amx_->base + header->dat;
+        }
+        if (!data) return false;
+        const auto base = reinterpret_cast<std::uintptr_t>(data);
+        const auto address = reinterpret_cast<std::uintptr_t>(pointer);
+        if (address < base || address - base > static_cast<std::uintptr_t>(std::numeric_limits<cell>::max()))
+            return false;
+        return cells(static_cast<cell>(address - base), count) == pointer;
+    }
     cell* cells(cell address, std::size_t count = 1) const noexcept {
         if (!amx_ || address < 0 || address % 4 != 0 || count == 0 ||
             count > static_cast<std::size_t>(std::numeric_limits<cell>::max()) / 4)
@@ -69,11 +84,16 @@ private:
 struct Context { Service& service; Owner owner; Memory memory; const cell* p; };
 template <std::size_t Count, typename Function>
 cell invoke(AMX* amx, const cell* params, Function function) noexcept {
-    if (!route || !amx || !params || params[0] != static_cast<cell>(Count * sizeof(cell)))
+    if (!route || !amx || !params)
+        return static_cast<cell>(Status::InvalidArgument);
+    const Memory memory(amx);
+    // The AMX interpreter passes its stack pointer, but the count cell is script
+    // controlled. Validate the entire expected argument block before reading it.
+    if (!memory.parameters(params, Count + 1) || params[0] != static_cast<cell>(Count * sizeof(cell)))
         return static_cast<cell>(Status::InvalidArgument);
     const auto owner = route->owner(amx);
     if (!owner) return static_cast<cell>(Status::InvalidArgument);
-    try { return static_cast<cell>(function(Context{route->service(), owner, Memory(amx), params})); }
+    try { return static_cast<cell>(function(Context{route->service(), owner, memory, params})); }
     catch (...) { return static_cast<cell>(Status::InternalError); }
 }
 Status get_value(Context& c, Value& value) {

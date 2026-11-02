@@ -76,7 +76,7 @@ jobs:
       - run: python scripts/verify_package.py dist/Maxora-2.0.0-${{ matrix.platform }}.zip --commit "$GITHUB_SHA"
       - run: python -m zipfile -e dist/Maxora-2.0.0-${{ matrix.platform }}.zip rc
       - run: |
-          cmake -S lib/compiler/source/compiler -B build-pawn -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake -S lib/compiler/source/compiler -B build-pawn -DCMAKE_C_FLAGS=-DPAWN_CELL_SIZE=32 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
           cmake --build build-pawn --config Release --parallel 2 --target pawncc
       - run: python scripts/download_runtime.py --platform ${{ matrix.platform }} --out ${{ matrix.runtime }}
       - run: python scripts/openmp_integration.py --server-archive ${{ matrix.runtime }} --component ${{ matrix.binary }} --pawncc ${{ matrix.pawncc }} --duration 10 --evidence rc-runtime-evidence.json

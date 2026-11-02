@@ -324,8 +324,9 @@ Status Service::lookup(Owner owner, Handle handle, std::string_view ip, Handle& 
     if (!found.found_entry) return Status::NoRecord;
     auto prefix = found.netmask;
     if (!address.v6 && (*database)->raw().metadata.ip_version == 6) {
-        if (prefix < 96) return Status::DecoderError;
-        prefix = static_cast<std::uint16_t>(prefix - 96U);
+        // An IPv6 record can cover the entire embedded IPv4 space before
+        // reaching bit 96. Such a record is IPv4 /0, not decoder corruption.
+        prefix = prefix <= 96 ? 0 : static_cast<std::uint16_t>(prefix - 96U);
     }
     if (prefix > (address.v6 ? 128 : 32)) return Status::DecoderError;
     Lookup result{*database, found.entry, prefix};

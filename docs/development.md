@@ -1,6 +1,6 @@
 # Development and testing
 
-Tests execute with CTest; building test executables alone is not validation. `core` exercises the real engine using redistributable synthetic MMDB fixtures from the pinned MaxMind-DB submodule. `pawn_boundary` exercises native boundaries on component builds. The external integration harness compiles Pawn scripts and loads the actual component in the pinned open.mp server. See workflow logs and the production-readiness report for results that were actually observed.
+Tests execute with CTest; building test executables alone is not validation. `core` exercises the real engine using redistributable synthetic MMDB fixtures from the pinned MaxMind-DB submodule. `pawn_boundary` exercises native boundaries in component and core-only builds. The external integration harness compiles Pawn scripts and loads the actual component in the pinned open.mp server. See workflow logs and the production-readiness report for results that were actually observed.
 
 ```sh
 ctest --test-dir build -C Release --output-on-failure
@@ -17,17 +17,21 @@ CC=clang CXX=clang++ cmake -S . -B build-sanitize -G Ninja \
 cmake --build build-sanitize
 ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-sanitize --output-on-failure
 mkdir -p fuzz-corpus
+cp fuzz/corpus/* fuzz-corpus/
 build-sanitize/maxora_parser_fuzz fuzz-corpus -max_total_time=60 -max_len=4096
+mkdir -p native-corpus
+cp fuzz/native-corpus/* native-corpus/
+build-sanitize/maxora_native_fuzz native-corpus -max_total_time=60 -max_len=4096
 ```
 
-The bounded harness targets numeric IP parsing, JSON Pointer parsing and UTF-8 validation. This complements the upstream decoder tests and fuzzing; it is not proof that every corrupted file is rejected during open. MMDB record decoding is lazy. A database may open successfully and fail when a damaged entry is reached.
+The parser harness targets numeric IP parsing, JSON Pointer parsing and UTF-8 validation. The native harness exercises fourteen read-only natives against a fixed synthetic database, mutating AMX counts, spans, paths, capacities and cell contents; it never opens fuzz-controlled file paths. Core and native boundary code have libFuzzer coverage instrumentation. This complements upstream decoder tests and fuzzing; it is not proof that every corrupted file is rejected during open. MMDB record decoding is lazy. A database may open successfully and fail when a damaged entry is reached.
 
 ## Runtime integration
 
 Build the pinned Pawn compiler separately:
 
 ```sh
-cmake -S lib/compiler/source/compiler -B build-pawn -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release
+cmake -S lib/compiler/source/compiler -B build-pawn -DCMAKE_C_FLAGS=-DPAWN_CELL_SIZE=32 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release
 cmake --build build-pawn --config Release
 ```
 

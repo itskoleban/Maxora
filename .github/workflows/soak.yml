@@ -35,7 +35,7 @@ jobs:
           cmake -S . -B build -G Ninja -DMAXORA_BUILD_COMPONENT=OFF -DCMAKE_BUILD_TYPE=Release
           cmake --build build --parallel 2
           ctest --test-dir build --output-on-failure
-          cmake -S lib/compiler/source/compiler -B build-pawn -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake -S lib/compiler/source/compiler -B build-pawn -DCMAKE_C_FLAGS=-DPAWN_CELL_SIZE=32 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
           cmake --build build-pawn --parallel 2 --target pawncc
           python3 scripts/download_runtime.py --platform linux-x86 --out runtime.tar.gz
       - name: Short stress and runtime checks must pass before soak
