@@ -1,0 +1,27 @@
+{
+  "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+  "candidate_tag": "v2.0.0-rc.1",
+  "release_url": "https://github.com/itskoleban/Maxora/releases/tag/v2.0.0-rc.1",
+  "workflow_url": "https://github.com/itskoleban/Maxora/actions/runs/41529165013",
+  "workflow_conclusion": "success",
+  "published_artifact_tests": {
+    "windows-x86": "passed",
+    "linux-x86": "passed"
+  },
+  "platforms": {
+    "windows-x86": {
+      "package_sha256": "94e8b09a6b96ab4ed4dcebfcd5e088942875f1eee54a81ab0efd202dde9fe7b2",
+      "binary_sha256": "2954df7df59969fb99a8bde6b16bca3333413fc492ce6fcf366aef75f7d11112",
+      "package_bytes": 156712,
+      "members": 59
+    },
+    "linux-x86": {
+      "package_sha256": "bbfb2d4ee000cf19883f5261a31f76309b3c66d53148e458b854b1730ce6d6fd",
+      "binary_sha256": "7926298cbe2bcf950b020be91ec4274dfd026034b25a46aad4312d923aca9db2",
+      "package_bytes": 185345,
+      "members": 59
+    }
+  },
+  "soak_status": "running",
+  "stable_published": false
+}

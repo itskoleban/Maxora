@@ -1,0 +1,87 @@
+{
+  "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+  "candidate_tag": "v2.0.0-rc.1",
+  "package_sha256": {
+    "windows-x86": "94e8b09a6b96ab4ed4dcebfcd5e088942875f1eee54a81ab0efd202dde9fe7b2",
+    "linux-x86": "bbfb2d4ee000cf19883f5261a31f76309b3c66d53148e458b854b1730ce6d6fd"
+  },
+  "gates": {
+    "windows_x86_build": {
+      "status": "passed",
+      "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+      "evidence": "https://github.com/itskoleban/Maxora/actions/runs/41529165013/job/125564603909"
+    },
+    "linux_x86_build": {
+      "status": "passed",
+      "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+      "evidence": "https://github.com/itskoleban/Maxora/actions/runs/41529165013/job/125564604104"
+    },
+    "windows_x86_runtime": {
+      "status": "passed",
+      "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+      "evidence": "https://github.com/itskoleban/Maxora/actions/runs/41529165013/job/125566796522"
+    },
+    "linux_x86_runtime": {
+      "status": "passed",
+      "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+      "evidence": "https://github.com/itskoleban/Maxora/actions/runs/41529165013/job/125566796641"
+    },
+    "unit_native_tests": {
+      "status": "passed",
+      "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+      "evidence": "https://github.com/itskoleban/Maxora/actions/runs/41529165013/job/125564604060"
+    },
+    "asan_ubsan": {
+      "status": "passed",
+      "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+      "evidence": "https://github.com/itskoleban/Maxora/actions/runs/41529165013/job/125564603877"
+    },
+    "fuzz": {
+      "status": "passed",
+      "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+      "evidence": "https://github.com/itskoleban/Maxora/actions/runs/41529165013/job/125564603877"
+    },
+    "stress": {
+      "status": "passed",
+      "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+      "evidence": "https://github.com/itskoleban/Maxora/actions/runs/41529165013/job/125564603597"
+    },
+    "benchmark_review": {
+      "status": "passed",
+      "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+      "evidence": "https://github.com/itskoleban/Maxora/actions/runs/41529165013/job/125564603597"
+    },
+    "documentation_examples": {
+      "status": "passed",
+      "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+      "evidence": "https://github.com/itskoleban/Maxora/actions/runs/41529165013/job/125564603909"
+    },
+    "package_verification": {
+      "status": "passed",
+      "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+      "evidence": "https://github.com/itskoleban/Maxora/actions/runs/41529165013/job/125566628232"
+    },
+    "release_candidate_artifacts": {
+      "status": "passed",
+      "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+      "evidence": "https://github.com/itskoleban/Maxora/actions/runs/41529165013/job/125566796522"
+    },
+    "security_review": {
+      "status": "passed",
+      "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+      "evidence": "docs/validation/security-review.md; reviewed C++ changes included in candidate and candidate tests passed"
+    }
+  },
+  "soak": {
+    "status": "running",
+    "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+    "duration_seconds": 0,
+    "started_utc": "2026-11-02T21:38:11.573477+00:00",
+    "environment": "Windows x86 open.mp v1.6.7.3218; actual published candidate DLL; local MSVC-built pinned 32-bit-cell Pawn compiler",
+    "workload": "Mixed IPv4/IPv6, missing field/record, multiple DBs and periodic reload/unload/snapshot checks; nominal957 native calls/s",
+    "evidence": "docs/validation/soak-start.json; final continuous result pending"
+  },
+  "unresolved_critical_high": 0,
+  "reviewer": null,
+  "reviewed_at": null
+}

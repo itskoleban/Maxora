@@ -1,0 +1,37 @@
+{
+  "status": "passed",
+  "component_sha256": "cd0314fbcd7cdca979f2860c0eed709c45e871e086faced5d6561a7f406c65cf",
+  "requested_workload_seconds": 60.0,
+  "runtime": "open.mp v1.6.7.3218",
+  "platform": "nt",
+  "log": "windows-x86-runtime.log",
+  "workload": "30 lookup/get/release iterations every 100 ms; nominal 900 native operations/s",
+  "memory_measurement": "resident process memory sampled once per second; not an allocation count",
+  "runtime_archive_sha256": "db44b6cedc78e79fa4c7470ec81186ad9e880ad34529ae78fddfea70ec603223",
+  "workload_seconds": 60.01692750000075,
+  "markers": {
+    "MAXORA_MAIN_PASS": 2,
+    "MAXORA_AFTER_RESET_PASS": 2,
+    "MAXORA_SIDE_PASS": 3,
+    "MAXORA_SIDE_EXIT": 3,
+    "MAXORA_SOAK_TICK": 60,
+    "MAXORA_SIDE_CLEANUP_PASS": 2,
+    "MAXORA_MAIN_CLEANUP_PASS": 1,
+    "MAXORA_WORKLOAD_FINISHED": 1
+  },
+  "minimum_completed_iterations": 18000,
+  "minimum_completed_native_operations": 54000,
+  "resident_memory_samples": 59,
+  "first_resident_bytes": 60444672,
+  "last_resident_bytes": 60407808,
+  "maximum_sampled_resident_bytes": 60477440,
+  "final_24h_soak_passed": false,
+  "exit_code": 0,
+  "lifecycle_checks": [
+    "initial gamemode and filterscript",
+    "filterscript reload/unload/load",
+    "GMX and post-reset lookup",
+    "graceful shutdown"
+  ],
+  "total_elapsed_seconds": 74.20221520000086
+}

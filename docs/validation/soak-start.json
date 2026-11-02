@@ -1,0 +1,24 @@
+{
+  "status": "running",
+  "source_commit": "c9c5fdd7470f67a93d39afbb3be41c96922eadc3",
+  "candidate_tag": "v2.0.0-rc.1",
+  "wrapper_pid": 2164,
+  "started_utc": "2026-11-02T21:38:11.573477+00:00",
+  "requested_workload_seconds": 86400,
+  "package_sha256": "94e8b09a6b96ab4ed4dcebfcd5e088942875f1eee54a81ab0efd202dde9fe7b2",
+  "component_sha256": "2954df7df59969fb99a8bde6b16bca3333413fc492ce6fcf366aef75f7d11112",
+  "runtime_archive_sha256": "db44b6cedc78e79fa4c7470ec81186ad9e880ad34529ae78fddfea70ec603223",
+  "platform": "win32",
+  "harness_sha256": "3b7f4e5c9c9a8a8ebc53741086bed9a11871ee7e1d3db6ee17f3ee259d48d7e4",
+  "fixture_sha256": {
+    "MaxMind-DB-test-decoder.mmdb": "1b34970ee2f8b05c03a478e90b8e5266a01ea2f9385f361bfd3d31edd8d4ce3a",
+    "MaxMind-DB-test-ipv4-24.mmdb": "07249989619a06bd267bf6aba890ed2f0ef490000c9bc82419bfbe0a924b2e02",
+    "MaxMind-DB-test-ipv6-24.mmdb": "599f1555ce3a568c2d4ad965332dcba87d0d109297636f1b595241247263d98b"
+  },
+  "evidence": "Local outputs/Maxora-rc1-24h-soak.json (pending final result)",
+  "monitor": {
+    "id": "maxora-rc-soak-read-only-monitor",
+    "status": "ACTIVE",
+    "scope": "User-authorized read-only hourly checks for at most 26 runs; completion/failure/intervention notifications only"
+  }
+}
