@@ -1,0 +1,37 @@
+{
+  "status": "passed",
+  "component_sha256": "7926298cbe2bcf950b020be91ec4274dfd026034b25a46aad4312d923aca9db2",
+  "requested_workload_seconds": 10.0,
+  "runtime": "open.mp v1.6.7.3218",
+  "platform": "posix",
+  "log": "runtime-evidence.log",
+  "workload": "Every 100ms: 30 IPv4 lookup/get/release, missing field, IPv6 lookup/prefix/release, missing IPv4; every 10 ticks reload/failure/unload/replacement/snapshot (nominal 957 native operations/s)",
+  "memory_measurement": "resident process memory sampled once per second; not an allocation count",
+  "runtime_archive_sha256": "0f7bfe70bb68ea780fe24a910b69412046e53d10feb65a9d4a9de8ff1f7f1329",
+  "workload_seconds": 10.03216895300001,
+  "markers": {
+    "MAXORA_MAIN_PASS": 2,
+    "MAXORA_AFTER_RESET_PASS": 2,
+    "MAXORA_SIDE_PASS": 3,
+    "MAXORA_SIDE_EXIT": 3,
+    "MAXORA_SOAK_TICK": 10,
+    "MAXORA_SIDE_CLEANUP_PASS": 2,
+    "MAXORA_MAIN_CLEANUP_PASS": 1,
+    "MAXORA_WORKLOAD_FINISHED": 1
+  },
+  "minimum_completed_iterations": 3000,
+  "minimum_completed_native_operations": 9500,
+  "resident_memory_samples": 10,
+  "first_resident_bytes": 65642496,
+  "last_resident_bytes": 65642496,
+  "maximum_sampled_resident_bytes": 65642496,
+  "final_24h_soak_passed": false,
+  "exit_code": 0,
+  "lifecycle_checks": [
+    "initial gamemode and filterscript",
+    "filterscript reload/unload/load",
+    "GMX and post-reset lookup",
+    "graceful shutdown"
+  ],
+  "total_elapsed_seconds": 12.089171024999999
+}

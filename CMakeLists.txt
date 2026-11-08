@@ -1,71 +1,153 @@
-cmake_minimum_required(VERSION 3.19...3.28)
-project(maxora VERSION 1.1.0 LANGUAGES C CXX)
+cmake_minimum_required(VERSION 3.24)
+project(Maxora VERSION 2.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+option(MAXORA_BUILD_COMPONENT "Build the open.mp x86 component" ON)
+option(MAXORA_BUILD_TESTS "Build and register automated tests" ON)
+option(MAXORA_BUILD_BENCHMARKS "Build reproducible benchmark executable" ON)
+option(MAXORA_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(MAXORA_BUILD_FUZZERS "Build libFuzzer input boundary harness" OFF)
+option(MAXORA_WARNINGS_AS_ERRORS "Treat Maxora warnings as errors" ON)
 
-# Add libmaxminddb (static)
-set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+# Older SDK transitive CMake files still declare pre-3.5 policies. This floor
+# changes their CMake policy interpretation; C++ diagnostics remain enabled.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-add_subdirectory(lib/libmaxminddb)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(MAXMINDDB_BUILD_BINARIES OFF CACHE BOOL "" FORCE)
+set(MAXMINDDB_INSTALL OFF CACHE BOOL "" FORCE)
+add_subdirectory(lib/libmaxminddb EXCLUDE_FROM_ALL)
+# Dependency headers use extensions such as uint128. Keep diagnostics strict on
+# Maxora itself while treating upstream headers as external system headers.
+get_target_property(MAXORA_MMDB_INCLUDES maxminddb INTERFACE_INCLUDE_DIRECTORIES)
+set_property(TARGET maxminddb PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${MAXORA_MMDB_INCLUDES}")
 
-add_library(maxora SHARED
-    src/main.cpp
-    src/maxmind_store.cpp
-    src/natives.cpp
-)
-
-set_target_properties(maxora PROPERTIES PREFIX "" OUTPUT_NAME "Maxora")
-
-# Application Includes
-target_include_directories(maxora PRIVATE
-    src
-)
-
-# Open.mp SDK and Dependencies Includes (Marked as SYSTEM to suppress warnings)
-target_include_directories(maxora SYSTEM PRIVATE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/sdk/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/sdk/lib/glm>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/sdk/lib/robin-hood-hashing/src/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/sdk/lib/span-lite/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/sdk/lib/string-view-lite/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/pawn-natives>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/compiler/source>
-)
-
-if (UNIX)
-    target_include_directories(maxora SYSTEM PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/compiler/source/linux>)
+if(MAXORA_SANITIZERS)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" OR WIN32)
+    message(FATAL_ERROR "ASan+UBSan configuration requires Linux GCC or Clang")
+  endif()
+  add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address,undefined)
+  target_compile_options(maxminddb PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
 endif()
 
-target_compile_definitions(maxora PRIVATE
-    PAWN_NATIVES_HAS_FUNC
-    PAWN_NATIVES_HAS_AMX
-    PAWN_NATIVES_HAS_AMX_INFO
-    HAVE_STDINT_H=1
-    HAVE_ALLOCA_H=0
-    PAWN_CELL_SIZE=32
-    GLM_FORCE_QUAT_DATA_WXYZ
-    NOMINMAX
-    nssv_CONFIG_SELECT_STRING_VIEW=nssv_STRING_VIEW_NONSTD
-    span_CONFIG_SELECT_SPAN=span_SPAN_NONSTD
-)
+function(maxora_target target)
+  if(MSVC)
+    target_compile_options(${target} PRIVATE /W4 /permissive- /sdl /guard:cf)
+    target_link_options(${target} PRIVATE /guard:cf /DYNAMICBASE /NXCOMPAT)
+    if(MAXORA_WARNINGS_AS_ERRORS)
+      target_compile_options(${target} PRIVATE /WX)
+    endif()
+  else()
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wformat=2 -fstack-protector-strong)
+    if(MAXORA_WARNINGS_AS_ERRORS)
+      target_compile_options(${target} PRIVATE -Werror)
+    endif()
+    if(UNIX AND NOT APPLE)
+      target_link_options(${target} PRIVATE -Wl,-z,relro,-z,now -Wl,--no-undefined)
+    endif()
+  endif()
+endfunction()
 
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
-    target_compile_definitions(maxora PRIVATE GLM_FORCE_SSE2)
-else()
-    target_compile_definitions(maxora PRIVATE GLM_FORCE_NEON)
+add_library(maxora_core STATIC src/core.cpp)
+target_include_directories(maxora_core PUBLIC src)
+target_link_libraries(maxora_core PUBLIC maxminddb::maxminddb)
+if(WIN32)
+  target_compile_definitions(maxora_core PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_link_libraries(maxora_core PUBLIC ws2_32 psapi)
+endif()
+maxora_target(maxora_core)
+
+add_library(maxora_pawn INTERFACE)
+target_link_libraries(maxora_pawn INTERFACE maxora_core)
+target_include_directories(maxora_pawn SYSTEM INTERFACE lib/compiler/source)
+if(UNIX)
+  target_include_directories(maxora_pawn SYSTEM INTERFACE lib/compiler/source/linux)
+endif()
+target_compile_definitions(maxora_pawn INTERFACE PAWN_CELL_SIZE=32 HAVE_STDINT_H=1)
+if(WIN32)
+  # MinGW uses the Windows stack allocator; it has no POSIX alloca.h.
+  target_compile_definitions(maxora_pawn INTERFACE HAVE_ALLOCA_H=0)
 endif()
 
-target_link_libraries(maxora PRIVATE maxminddb)
-
-if (WIN32)
-    target_link_libraries(maxora PRIVATE ws2_32)
+if(MAXORA_BUILD_COMPONENT)
+  if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
+    message(FATAL_ERROR "The distributed open.mp component requires x86. Configure -A Win32 or Linux -m32. Core-only x64 tests: -DMAXORA_BUILD_COMPONENT=OFF")
+  endif()
+  add_subdirectory(lib/sdk EXCLUDE_FROM_ALL)
+  get_target_property(MAXORA_SDK_INCLUDES OMP-SDK INTERFACE_INCLUDE_DIRECTORIES)
+  set_property(TARGET OMP-SDK PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${MAXORA_SDK_INCLUDES}")
+  add_library(maxora MODULE src/component.cpp src/pawn_bridge.cpp)
+  target_link_libraries(maxora PRIVATE maxora_pawn OMP-SDK)
+  set_target_properties(maxora PROPERTIES PREFIX "" OUTPUT_NAME "Maxora" CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+  maxora_target(maxora)
+  install(TARGETS maxora LIBRARY DESTINATION components RUNTIME DESTINATION components)
 endif()
 
-# Backend Test Executable
-add_executable(maxora_test test/test_backend.cpp)
-target_include_directories(maxora_test PRIVATE lib/libmaxminddb/include src)
-target_link_libraries(maxora_test PRIVATE maxminddb)
-if (WIN32)
-    target_link_libraries(maxora_test PRIVATE ws2_32)
+set(MAXORA_FIXTURE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/libmaxminddb/t/maxmind-db/test-data" CACHE PATH "Redistributable MaxMind synthetic fixtures")
+if(MAXORA_BUILD_TESTS)
+  enable_testing()
+  add_executable(maxora_core_tests tests/core_tests.cpp)
+  target_link_libraries(maxora_core_tests PRIVATE maxora_core)
+  target_compile_definitions(maxora_core_tests PRIVATE MAXORA_FIXTURE_DIR="${MAXORA_FIXTURE_DIR}")
+  maxora_target(maxora_core_tests)
+  add_test(NAME core COMMAND maxora_core_tests)
+  set_tests_properties(core PROPERTIES TIMEOUT 180)
+  add_executable(maxora_native_tests tests/native_tests.cpp src/pawn_bridge.cpp)
+  target_link_libraries(maxora_native_tests PRIVATE maxora_pawn)
+  target_compile_definitions(maxora_native_tests PRIVATE MAXORA_FIXTURE_DIR="${MAXORA_FIXTURE_DIR}")
+  maxora_target(maxora_native_tests)
+  add_test(NAME pawn_boundary COMMAND maxora_native_tests)
+  set_tests_properties(pawn_boundary PROPERTIES TIMEOUT 180)
 endif()
+
+if(MAXORA_BUILD_BENCHMARKS)
+  add_executable(maxora_benchmark benchmarks/benchmark.cpp)
+  target_link_libraries(maxora_benchmark PRIVATE maxora_core)
+  target_compile_definitions(maxora_benchmark PRIVATE MAXORA_FIXTURE_DIR="${MAXORA_FIXTURE_DIR}")
+  maxora_target(maxora_benchmark)
+endif()
+
+if(MAXORA_BUILD_FUZZERS)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR WIN32)
+    message(FATAL_ERROR "libFuzzer target requires Linux Clang")
+  endif()
+  if(NOT MAXORA_SANITIZERS)
+    message(FATAL_ERROR "Fuzzers require MAXORA_SANITIZERS=ON to instrument the database dependency")
+  endif()
+  # Compile the core separately so libFuzzer observes parser/conversion branch
+  # coverage, while ordinary tests continue to link a non-fuzzer core.
+  add_library(maxora_fuzz_core STATIC src/core.cpp)
+  target_include_directories(maxora_fuzz_core PUBLIC src)
+  target_link_libraries(maxora_fuzz_core PUBLIC maxminddb::maxminddb)
+  target_compile_options(maxora_fuzz_core PRIVATE -fsanitize=fuzzer-no-link,address,undefined)
+  maxora_target(maxora_fuzz_core)
+  add_executable(maxora_parser_fuzz fuzz/parser_fuzz.cpp)
+  target_link_libraries(maxora_parser_fuzz PRIVATE maxora_fuzz_core)
+  target_compile_options(maxora_parser_fuzz PRIVATE -fsanitize=fuzzer,address,undefined)
+  target_link_options(maxora_parser_fuzz PRIVATE -fsanitize=fuzzer,address,undefined)
+  add_executable(maxora_native_fuzz fuzz/native_fuzz.cpp src/pawn_bridge.cpp)
+  target_link_libraries(maxora_native_fuzz PRIVATE maxora_fuzz_core)
+  target_include_directories(maxora_native_fuzz SYSTEM PRIVATE lib/compiler/source lib/compiler/source/linux)
+  target_compile_definitions(maxora_native_fuzz PRIVATE PAWN_CELL_SIZE=32 HAVE_STDINT_H=1 MAXORA_FIXTURE_DIR="${MAXORA_FIXTURE_DIR}")
+  target_compile_options(maxora_native_fuzz PRIVATE -fsanitize=fuzzer,address,undefined)
+  target_link_options(maxora_native_fuzz PRIVATE -fsanitize=fuzzer,address,undefined)
+  maxora_target(maxora_native_fuzz)
+endif()
+
+install(FILES include/maxora.inc DESTINATION include)
+install(FILES LICENSE README.md CHANGELOG.md DESTINATION .)
+install(DIRECTORY docs/ DESTINATION docs)
+install(DIRECTORY examples/ DESTINATION examples)
+install(FILES benchmarks/README.md DESTINATION benchmarks)
+install(DIRECTORY benchmarks/results/ DESTINATION benchmarks/results)
+install(FILES lib/libmaxminddb/LICENSE lib/libmaxminddb/NOTICE DESTINATION licenses/libmaxminddb)
+install(FILES lib/sdk/LICENSE.md DESTINATION licenses/open.mp-sdk)
+install(FILES lib/compiler/license.txt DESTINATION licenses/compiler)
+install(FILES lib/sdk/lib/glm/copying.txt DESTINATION licenses/glm)
+install(FILES lib/sdk/lib/robin-hood-hashing/LICENSE DESTINATION licenses/robin-hood-hashing)
+install(FILES lib/sdk/lib/span-lite/LICENSE.txt DESTINATION licenses/span-lite)
+install(FILES lib/sdk/lib/string-view-lite/LICENSE.txt DESTINATION licenses/string-view-lite)
