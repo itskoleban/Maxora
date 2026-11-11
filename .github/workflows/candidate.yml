@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       authorization:
-        description: Run on the existing v2.0.0-omp-mmdb.rc.N tag and type publish v2.0.0 candidate
+        description: Run on the existing v2.0.0-rc.N (N >= 2) tag and type publish v2.0.0 candidate
         required: true
         type: string
 permissions:
@@ -17,7 +17,7 @@ jobs:
           RELEASE_AUTHORIZATION: ${{ inputs.authorization }}
         run: |
           test "$RELEASE_AUTHORIZATION" = 'publish v2.0.0 candidate'
-          [[ "$GITHUB_REF" =~ ^refs/tags/v2\.0\.0-omp-mmdb\.rc\.[1-9][0-9]*$ ]]
+          [[ "$GITHUB_REF" =~ ^refs/tags/v2\.0\.0-rc\.([2-9]|[1-9][0-9]+)$ ]]
   compilation:
     needs: authorize
     uses: ./.github/workflows/build.yml
