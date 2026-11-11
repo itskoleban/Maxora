@@ -9,6 +9,7 @@ Replace `Maxora.dll` or `Maxora.so` in `components/` with `MMDB.dll` or `MMDB.so
 | 2.0 RC `Maxora_Lookup` and a subsequent field read | `mmdb_get_string("city", ip, path, destination, capacity, required)` |
 | 2.0 RC `Maxora_Release` | Remove the call and the result variable |
 | 1.x dot-delimited paths | Convert to JSON Pointers, such as `/country/names/en` |
+| 2.0 RC negative array indexes such as `/array/-1` | Use `mmdb_get_size` and construct a zero-based index such as `size - 1` for the last item |
 | Provider helpers | Use the field path from the provider's schema |
 | 1.x last error | Check the native's return status and use `mmdb_get_status_message` |
 

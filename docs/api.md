@@ -57,7 +57,7 @@ Use unpacked Pawn strings. For every text output, `capacity` counts cells includ
 | `MMDB_INVALID_PATH` | Invalid JSON Pointer syntax or array index |
 | `MMDB_OPEN_FAILED` | A local regular file could not be opened or mapped |
 | `MMDB_INVALID_DATABASE` | File layout or metadata failed validation |
-| `MMDB_UNSUPPORTED_DATABASE` | The reader rejected the file format version |
+| `MMDB_UNSUPPORTED_DATABASE` | The reader rejected the format version or record width |
 | `MMDB_NO_RECORD` | The database has no matching network |
 | `MMDB_NO_FIELD` | The record has no matching field |
 | `MMDB_TYPE_MISMATCH` | The requested operation does not accept that value type |
