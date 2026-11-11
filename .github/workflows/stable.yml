@@ -3,15 +3,16 @@ on:
   workflow_dispatch:
     inputs:
       candidate_tag:
-        description: Verified v2.0.0-rc.N to promote without rebuilding
+        description: Verified v0.1.0-rc.N to promote without rebuilding
         required: true
         type: string
       authorization:
-        description: Type publish verified v2.0.0 after reviewing all production evidence
+        description: Type publish verified v0.1.0 after reviewing all production evidence
         required: true
         type: string
 permissions:
   contents: read
+  actions: read
 jobs:
   gate:
     runs-on: ubuntu-24.04
@@ -31,14 +32,14 @@ jobs:
           RELEASE_AUTHORIZATION: ${{ inputs.authorization }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          test "$RELEASE_AUTHORIZATION" = 'publish verified v2.0.0'
-          [[ "$RC_TAG" =~ ^v2\.0\.0-rc\.[0-9]+$ ]]
+          test "$RELEASE_AUTHORIZATION" = 'publish verified v0.1.0'
+          [[ "$RC_TAG" =~ ^v0\.1\.0-rc\.[0-9]+$ ]]
           SHA=$(git rev-parse "refs/tags/$RC_TAG^{commit}")
           test "$(gh release view "$RC_TAG" --json isPrerelease --jq .isPrerelease)" = true
           gh api "repos/$GITHUB_REPOSITORY/actions/workflows/candidate.yml/runs?head_sha=$SHA&status=success" > candidate-runs.json
-          python scripts/release_gate.py --evidence docs/validation/stable.json --commit "$SHA" --candidate-tag "$RC_TAG" --candidate-runs candidate-runs.json
+          python scripts/release_gate.py --evidence docs/validation/omp-mmdb-stable.json --commit "$SHA" --candidate-tag "$RC_TAG" --candidate-runs candidate-runs.json
           echo "commit=$SHA" >> "$GITHUB_OUTPUT"
-          python -c 'import json,os; r=json.load(open("docs/validation/stable.json")); f=open(os.environ["GITHUB_OUTPUT"],"a"); f.write("windows_sha="+r["package_sha256"]["windows-x86"]+"\nlinux_sha="+r["package_sha256"]["linux-x86"]+"\n")'
+          python -c 'import json,os; r=json.load(open("docs/validation/omp-mmdb-stable.json")); f=open(os.environ["GITHUB_OUTPUT"],"a"); f.write("windows_sha="+r["package_sha256"]["windows-x86"]+"\nlinux_sha="+r["package_sha256"]["linux-x86"]+"\n")'
   publish:
     needs: gate
     runs-on: ubuntu-24.04
@@ -57,11 +58,11 @@ jobs:
           WINDOWS_SHA: ${{ needs.gate.outputs.windows_sha }}
           LINUX_SHA: ${{ needs.gate.outputs.linux_sha }}
         run: |
-          gh release download "$RC_TAG" --pattern 'Maxora-2.0.0-*.zip*' --dir dist
-          python scripts/verify_package.py dist/Maxora-2.0.0-windows-x86.zip --commit "$RELEASE_COMMIT" --sha "$WINDOWS_SHA"
-          python scripts/verify_package.py dist/Maxora-2.0.0-linux-x86.zip --commit "$RELEASE_COMMIT" --sha "$LINUX_SHA"
+          gh release download "$RC_TAG" --pattern 'omp-mmdb-0.1.0-*.zip*' --dir dist
+          python scripts/verify_package.py dist/omp-mmdb-0.1.0-windows-x86.zip --commit "$RELEASE_COMMIT" --sha "$WINDOWS_SHA"
+          python scripts/verify_package.py dist/omp-mmdb-0.1.0-linux-x86.zip --commit "$RELEASE_COMMIT" --sha "$LINUX_SHA"
       - name: Promote validated candidate bytes
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_COMMIT: ${{ needs.gate.outputs.release_commit }}
-        run: gh release create v2.0.0 dist/* docs/validation/stable.json --target "$RELEASE_COMMIT" --title 'Maxora 2.0.0' --notes-file docs/release-notes-v2.0.0.md
+        run: gh release create v0.1.0 dist/* docs/validation/omp-mmdb-stable.json --target "$RELEASE_COMMIT" --title 'omp-mmdb 0.1.0' --notes-file docs/release-notes-v0.1.0.md

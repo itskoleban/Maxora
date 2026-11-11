@@ -11,9 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          fetch-depth: 0
           submodules: recursive
           persist-credentials: false
-      - run: cmake -S . -B build -G Ninja -DMAXORA_BUILD_COMPONENT=OFF -DCMAKE_BUILD_TYPE=Release
+      - run: cmake -S . -B build -G Ninja -DMMDB_BUILD_COMPONENT=OFF -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build --parallel 2
       - name: Record benchmark environment
         run: |
@@ -26,10 +27,23 @@ jobs:
             git rev-parse HEAD
             git submodule status --recursive
           } > benchmark-environment.txt
-      - run: build/maxora_benchmark --iterations 100000 > benchmark.jsonl
+      - run: build/omp_mmdb_benchmark --iterations 100000 > benchmark.jsonl
       - run: python scripts/check_benchmark.py benchmark.jsonl
-      - run: build/maxora_benchmark --seconds 60 > stress.jsonl
+      - run: build/omp_mmdb_benchmark --seconds 60 > stress.jsonl
       - run: python scripts/check_benchmark.py stress.jsonl --minimum-seconds 60
+      - name: Build the Maxora 2.0 comparison baseline
+        env:
+          MAXORA_BASELINE: 661b8381f6397e21be54dfe6bd2ed3c4e2922b43
+        run: |
+          git worktree add --detach ../maxora-baseline "$MAXORA_BASELINE"
+          git -C ../maxora-baseline submodule update --init --recursive
+          cmake -S ../maxora-baseline -B ../maxora-baseline/build -G Ninja -DMAXORA_BUILD_COMPONENT=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build ../maxora-baseline/build --target maxora_benchmark --parallel 2
+      - name: Compare both architectures on the same runner
+        run: |
+          python scripts/compare_benchmarks.py --baseline ../maxora-baseline/build/maxora_benchmark \
+            --candidate build/omp_mmdb_benchmark --output-dir benchmark-comparison \
+            --fixtures lib/libmaxminddb/t/maxmind-db/test-data --iterations 10000 --trials 5
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: benchmark-evidence
@@ -37,3 +51,4 @@ jobs:
             benchmark.jsonl
             stress.jsonl
             benchmark-environment.txt
+            benchmark-comparison/

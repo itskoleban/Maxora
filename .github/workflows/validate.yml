@@ -2,7 +2,7 @@ name: Pull request validation
 on:
   pull_request:
   push:
-    branches: [rewrite/v2.0.0]
+    branches: [redesign/omp-mmdb]
   workflow_dispatch:
 permissions:
   contents: read

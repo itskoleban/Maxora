@@ -17,7 +17,7 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
-      - run: cmake -S . -B build -DMAXORA_BUILD_COMPONENT=OFF -DCMAKE_BUILD_TYPE=Release
+      - run: cmake -S . -B build -DMMDB_BUILD_COMPONENT=OFF -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build --config Release --parallel 2
       - run: ctest --test-dir build -C Release --output-on-failure --output-junit tests.xml
       - name: Validate release tooling

@@ -1,138 +1,150 @@
 #include "pawn_bridge.hpp"
+
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <set>
 #include <stdexcept>
-#include <vector>
 
-#ifndef MAXORA_FIXTURE_DIR
-#define MAXORA_FIXTURE_DIR "lib/libmaxminddb/t/maxmind-db/test-data"
-#endif
 namespace {
-using namespace maxora;
+using namespace mmdb;
+
 std::size_t checks = 0;
 void check(bool value, int line) {
-    ++checks;
-    if (!value) throw std::runtime_error("native test failure at line " + std::to_string(line));
+	++checks;
+	if (!value) throw std::runtime_error("Native test failed at line " + std::to_string(line));
 }
 #define CHECK(value) check((value), __LINE__)
-struct Vm {
-    std::array<cell, 8192> data{};
-    AMX amx{};
-    Vm() {
-        amx.data = reinterpret_cast<unsigned char*>(data.data());
-        amx.hea = 16384; amx.stk = 24576; amx.stp = 32768;
-    }
-    void string(cell at, std::string_view text) {
-        for (std::size_t i = 0; i < text.size(); ++i) data[static_cast<std::size_t>(at) / 4 + i] = static_cast<unsigned char>(text[i]);
-        data[static_cast<std::size_t>(at) / 4 + text.size()] = 0;
-    }
-    Status call(const char* name, std::initializer_list<cell> args) {
-        const auto start = static_cast<std::size_t>(amx.stk) / sizeof(cell);
-        if (args.size() + 1 > data.size() - start) throw std::runtime_error("test argument block exceeds VM stack");
-        auto* params = data.data() + start;
-        params[0] = static_cast<cell>(args.size() * sizeof(cell));
-        std::size_t index = 1;
-        for (const auto argument : args) params[index++] = argument;
-        for (int i = 0; i < native_count(); ++i)
-            if (std::strcmp(native_table()[i].name, name) == 0)
-                return static_cast<Status>(native_table()[i].func(&amx, params));
-        throw std::runtime_error("native missing");
-    }
-};
+
+constexpr cell name = 0, file = 512, ip = 2048, path = 3072, out = 4108, text = 5000;
+
+const AMX_NATIVE_INFO& native(const char* name) {
+	for (int i = 0; i < native_count(); ++i)
+		if (std::strcmp(native_table()[i].name, name) == 0) return native_table()[i];
+	throw std::runtime_error(std::string("Missing native ") + name);
 }
+
+struct Vm {
+	std::array<cell, 8192> data{};
+	AMX amx{};
+	Vm() {
+		amx.data = reinterpret_cast<unsigned char*>(data.data());
+		amx.hea = 16384;
+		amx.stk = 24576;
+		amx.stp = 32768;
+	}
+	cell& at(cell address) { return data[static_cast<std::size_t>(address) / sizeof(cell)]; }
+	void string(cell address, std::string_view value) {
+		for (std::size_t i = 0; i < value.size(); ++i)
+			at(address + static_cast<cell>(i * sizeof(cell))) = static_cast<unsigned char>(value[i]);
+		at(address + static_cast<cell>(value.size() * sizeof(cell))) = 0;
+	}
+	Status call(const char* function, std::initializer_list<cell> args) {
+		auto* params = &at(amx.stk);
+		params[0] = static_cast<cell>(args.size() * sizeof(cell));
+		std::copy(args.begin(), args.end(), params + 1);
+		return static_cast<Status>(native(function).func(&amx, params));
+	}
+};
+} // namespace
+
 int main() {
-    try {
-        Service service;
-        PawnBridge bridge(service);
-        Vm a, b;
-        CHECK(bridge.attach(&a.amx) == Status::Ok);
-        CHECK(bridge.attach(&b.amx) == Status::Ok);
-        std::set<std::string> names;
-        for (int i = 0; i < native_count(); ++i) {
-            CHECK(names.insert(native_table()[i].name).second);
-            CHECK(a.call(native_table()[i].name, {}) == Status::InvalidArgument);
-        }
-        CHECK(native_count() == 19);
-        // The claimed count cannot authorize reading beyond the actual AMX
-        // allocation, into the heap/stack gap, or from a foreign pointer.
-        const auto& is_valid = native_table()[3];
-        CHECK(std::strcmp(is_valid.name, "Maxora_IsValid") == 0);
-        a.data.back() = 2 * static_cast<cell>(sizeof(cell));
-        CHECK(static_cast<Status>(is_valid.func(&a.amx, a.data.data() + a.data.size() - 1)) == Status::InvalidArgument);
-        a.data[4095] = 2 * static_cast<cell>(sizeof(cell));
-        CHECK(static_cast<Status>(is_valid.func(&a.amx, a.data.data() + 4095)) == Status::InvalidArgument);
-        const std::array<cell, 3> foreign_params{8, 0, 0};
-        CHECK(static_cast<Status>(is_valid.func(&a.amx, foreign_params.data())) == Status::InvalidArgument);
-        const auto* misaligned = reinterpret_cast<const cell*>(reinterpret_cast<const unsigned char*>(a.data.data()) + 1);
-        CHECK(static_cast<Status>(is_valid.func(&a.amx, misaligned)) == Status::InvalidArgument);
-        const auto path = (std::filesystem::path(MAXORA_FIXTURE_DIR) / "MaxMind-DB-test-decoder.mmdb").string();
-        a.string(0, path);
-        CHECK(a.call("Maxora_Load", {0, 4096}) == Status::Ok);
-        const auto db = a.data[1024];
-        CHECK(db > 0);
-        CHECK(a.call("Maxora_IsValid", {db, 4100}) == Status::Ok && a.data[1025] == 1);
-        CHECK(b.call("Maxora_IsValid", {db, 4100}) == Status::WrongOwner);
-        a.string(2048, "1.1.1.1");
-        CHECK(a.call("Maxora_Lookup", {db, 2048, 4104}) == Status::Ok);
-        const auto result = a.data[1026];
-        a.string(3072, "/uint16");
-        CHECK(a.call("Maxora_GetInt", {result, 3072, 4108}) == Status::Ok && a.data[1027] == 100);
-        CHECK(a.call("Maxora_GetType", {result, 3072, 4108}) == Status::Ok && a.data[1027] == MMDB_DATA_TYPE_UINT16);
-        CHECK(a.call("Maxora_GetText", {result, 3072, 5000, 8, 4108}) == Status::Ok && a.data[1250] == '1');
-        a.string(3072, "/utf8_string");
-        a.data[1250] = 777;
-        CHECK(a.call("Maxora_GetString", {result, 3072, 5000, 1, 4108}) == Status::BufferTooSmall);
-        CHECK(a.data[1250] == 777 && a.data[1027] > 1);
-        CHECK(a.call("Maxora_GetString", {result, 3072, 5000, 100, 4108}) == Status::Ok);
-        CHECK(a.call("Maxora_GetSize", {result, 3072, 4108}) == Status::Ok && a.data[1027] > 0);
-        CHECK(a.call("Maxora_GetString", {result, 3072, 5000, 100, 5000}) == Status::InvalidArgument);
-        CHECK(a.call("Maxora_GetString", {result, 3072, 16380, 2, 4108}) == Status::InvalidArgument);
-        CHECK(a.call("Maxora_GetString", {result, 3072, 32764, 2, 4108}) == Status::InvalidArgument);
-        CHECK(a.call("Maxora_GetString", {result, 3072, 5000, -1, 4108}) == Status::InvalidArgument);
-        CHECK(a.call("Maxora_GetInt", {result, 3072, 16384}) == Status::InvalidArgument);
-        CHECK(a.call("Maxora_GetInt", {result, 3072, 4109}) == Status::InvalidArgument);
-        a.string(3072, "/boolean");
-        CHECK(a.call("Maxora_GetBoolean", {result, 3072, 4108}) == Status::Ok);
-        a.string(3072, "/double");
-        CHECK(a.call("Maxora_GetFloat", {result, 3072, 4108}) == Status::Ok);
-        a.string(3072, "/absent");
-        CHECK(a.call("Maxora_HasField", {result, 3072, 4108}) == Status::Ok && a.data[1027] == 0);
-        a.string(3072, "malformed");
-        CHECK(a.call("Maxora_HasField", {result, 3072, 4108}) == Status::InvalidPath);
-        CHECK(a.call("Maxora_GetPrefix", {result, 4108}) == Status::Ok);
-        CHECK(a.call("Maxora_GetDatabaseType", {db, 5000, 100, 4108}) == Status::Ok);
-        CHECK(a.call("Maxora_GetBuildEpoch", {db, 5000, 100, 4108}) == Status::Ok);
-        CHECK(a.call("Maxora_GetIpVersion", {db, 4108}) == Status::Ok);
-        CHECK(a.call("Maxora_GetStatusMessage", {0, 5000, 100, 4108}) == Status::Ok);
-        CHECK(a.call("Maxora_GetStatusMessage", {999, 5000, 100, 4108}) == Status::InvalidArgument);
-        a.string(2048, "localhost");
-        CHECK(a.call("Maxora_Lookup", {db, 2048, 4104}) == Status::InvalidIp);
-        // Invalid AMX ranges, unterminated and packed strings are never scanned.
-        a.data[0] = 0x41424344;
-        CHECK(a.call("Maxora_Reload", {db, 0}) == Status::InvalidArgument);
-        a.data[4095] = 'a';
-        CHECK(a.call("Maxora_Reload", {db, 16380}) == Status::InvalidArgument);
-        a.string(0, "missing.mmdb");
-        CHECK(a.call("Maxora_Reload", {db, 0}) == Status::OpenFailed);
-        CHECK(a.call("Maxora_IsValid", {db, 4100}) == Status::Ok && a.data[1025] == 1);
-        a.string(0, path);
-        CHECK(a.call("Maxora_Reload", {db, 0}) == Status::Ok);
-        CHECK(a.call("Maxora_Unload", {db}) == Status::Ok);
-        CHECK(a.call("Maxora_GetPrefix", {result, 4108}) == Status::Ok);
-        CHECK(a.call("Maxora_Release", {result}) == Status::Ok);
-        CHECK(a.call("Maxora_Release", {result}) == Status::InvalidHandle);
-        CHECK(a.call("Maxora_Load", {0, 4096}) == Status::Ok);
-        const auto next = a.data[1024];
-        CHECK(next != db);
-        CHECK(a.call("Maxora_Unload", {db}) == Status::InvalidHandle);
-        bridge.detach(&a.amx);
-        CHECK(service.size() == 0);
-        CHECK(a.call("Maxora_Unload", {next}) == Status::InvalidArgument);
-        CHECK(bridge.attach(&a.amx) == Status::Ok);
-        CHECK(a.call("Maxora_Unload", {next}) == Status::InvalidHandle);
-        std::cout << checks << " native checks passed\n";
-    } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
+	try {
+		Service service;
+		PawnBridge bridge(service);
+		Vm a, b;
+		CHECK(bridge.attach(&a.amx) == Status::Ok);
+		CHECK(bridge.attach(&b.amx) == Status::Ok);
+		std::set<std::string> names;
+		for (int i = 0; i < native_count(); ++i) {
+			CHECK(names.insert(native_table()[i].name).second);
+			CHECK(a.call(native_table()[i].name, {}) == Status::InvalidArgument);
+		}
+		CHECK(native_count() == 18);
+
+		const auto is_loaded = native("mmdb_is_loaded").func;
+		a.data.back() = 2 * static_cast<cell>(sizeof(cell));
+		CHECK(static_cast<Status>(is_loaded(&a.amx, a.data.data() + a.data.size() - 1)) == Status::InvalidArgument);
+		a.at(16380) = 2 * static_cast<cell>(sizeof(cell));
+		CHECK(static_cast<Status>(is_loaded(&a.amx, &a.at(16380))) == Status::InvalidArgument);
+		const std::array<cell, 3> foreign_params{8, name, out};
+		CHECK(static_cast<Status>(is_loaded(&a.amx, foreign_params.data())) == Status::InvalidArgument);
+		const auto* misaligned = reinterpret_cast<const cell*>(a.amx.data + 1);
+		CHECK(static_cast<Status>(is_loaded(&a.amx, misaligned)) == Status::InvalidArgument);
+
+		const auto decoder = (std::filesystem::path(MMDB_FIXTURE_DIR) / "MaxMind-DB-test-decoder.mmdb").string();
+		const auto ipv4 = (std::filesystem::path(MMDB_FIXTURE_DIR) / "MaxMind-DB-test-ipv4-24.mmdb").string();
+		a.string(name, "db");
+		a.string(file, decoder);
+		a.string(ip, "1.1.1.1");
+		b.string(name, "db");
+		b.string(file, ipv4);
+		CHECK(a.call("mmdb_load", {name, file}) == Status::Ok);
+		CHECK(a.call("mmdb_load", {name, file}) == Status::AlreadyLoaded);
+		CHECK(a.call("mmdb_is_loaded", {name, out}) == Status::Ok && a.at(out) == 1);
+		CHECK(b.call("mmdb_is_loaded", {name, out}) == Status::Ok && b.at(out) == 0);
+		CHECK(b.call("mmdb_unload", {name}) == Status::NotLoaded);
+		CHECK(b.call("mmdb_load", {name, file}) == Status::Ok);
+		CHECK(b.call("mmdb_get_ip_version", {name, out}) == Status::Ok && b.at(out) == 4);
+		CHECK(a.call("mmdb_get_ip_version", {name, out}) == Status::Ok && a.at(out) == 6);
+
+		a.string(path, "/uint16");
+		CHECK(a.call("mmdb_has_record", {name, ip, out}) == Status::Ok && a.at(out) == 1);
+		CHECK(a.call("mmdb_get_int", {name, ip, path, out}) == Status::Ok && a.at(out) == 100);
+		CHECK(a.call("mmdb_get_type", {name, ip, path, out}) == Status::Ok && a.at(out) == MMDB_DATA_TYPE_UINT16);
+		CHECK(a.call("mmdb_get_text", {name, ip, path, text, 8, out}) == Status::Ok && a.at(text) == '1');
+		a.string(path, "/utf8_string");
+		a.at(text) = 777;
+		CHECK(a.call("mmdb_get_string", {name, ip, path, text, 1, out}) == Status::BufferTooSmall);
+		CHECK(a.at(text) == 777 && a.at(out) > 1);
+		CHECK(a.call("mmdb_get_string", {name, ip, path, text, 100, out}) == Status::Ok);
+		CHECK(a.call("mmdb_get_size", {name, ip, path, out}) == Status::Ok && a.at(out) > 0);
+		CHECK(a.call("mmdb_get_string", {name, ip, path, text, 100, text}) == Status::InvalidArgument);
+		CHECK(a.call("mmdb_get_string", {name, ip, path, 16380, 2, out}) == Status::InvalidArgument);
+		CHECK(a.call("mmdb_get_string", {name, ip, path, 32764, 2, out}) == Status::InvalidArgument);
+		CHECK(a.call("mmdb_get_string", {name, ip, path, text, -1, out}) == Status::InvalidArgument);
+		CHECK(a.call("mmdb_get_int", {name, ip, path, 16384}) == Status::InvalidArgument);
+		CHECK(a.call("mmdb_get_int", {name, ip, path, out + 1}) == Status::InvalidArgument);
+		a.string(path, "/boolean");
+		CHECK(a.call("mmdb_get_bool", {name, ip, path, out}) == Status::Ok && a.at(out) == 1);
+		a.string(path, "/double");
+		CHECK(a.call("mmdb_get_float", {name, ip, path, out}) == Status::Ok);
+		a.string(path, "/absent");
+		CHECK(a.call("mmdb_has_field", {name, ip, path, out}) == Status::Ok && a.at(out) == 0);
+		a.string(path, "malformed");
+		CHECK(a.call("mmdb_has_field", {name, ip, path, out}) == Status::InvalidPath);
+		CHECK(a.call("mmdb_get_prefix", {name, ip, out}) == Status::Ok);
+		CHECK(a.call("mmdb_get_database_type", {name, text, 100, out}) == Status::Ok);
+		CHECK(a.call("mmdb_get_build_epoch", {name, text, 100, out}) == Status::Ok);
+		CHECK(a.call("mmdb_get_status_message", {0, text, 100, out}) == Status::Ok);
+		CHECK(a.call("mmdb_get_status_message", {999, text, 100, out}) == Status::InvalidArgument);
+		a.string(ip, "localhost");
+		CHECK(a.call("mmdb_has_record", {name, ip, out}) == Status::InvalidIp);
+
+		// Packed strings and unterminated strings cannot cross the AMX heap gap.
+		a.at(file) = 0x41424344;
+		CHECK(a.call("mmdb_reload", {name, file}) == Status::InvalidArgument);
+		a.at(16380) = 'a';
+		CHECK(a.call("mmdb_reload", {name, 16380}) == Status::InvalidArgument);
+		a.string(name, "bad/name");
+		CHECK(a.call("mmdb_is_loaded", {name, out}) == Status::InvalidArgument);
+		a.string(name, "db");
+		a.string(file, "missing.mmdb");
+		CHECK(a.call("mmdb_reload", {name, file}) == Status::OpenFailed);
+		CHECK(a.call("mmdb_is_loaded", {name, out}) == Status::Ok && a.at(out) == 1);
+		bridge.detach(&a.amx);
+		CHECK(service.size() == 1);
+		CHECK(a.call("mmdb_unload", {name}) == Status::InvalidArgument);
+		CHECK(bridge.attach(&a.amx) == Status::Ok);
+		CHECK(a.call("mmdb_is_loaded", {name, out}) == Status::Ok && a.at(out) == 0);
+		CHECK(b.call("mmdb_is_loaded", {name, out}) == Status::Ok && b.at(out) == 1);
+		CHECK(b.call("mmdb_unload", {name}) == Status::Ok);
+		CHECK(service.size() == 0);
+		std::cout << checks << " native checks passed\n";
+	} catch (const std::exception& error) {
+		std::cerr << error.what() << '\n';
+		return 1;
+	}
 }
