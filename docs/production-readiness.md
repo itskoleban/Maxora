@@ -1,6 +1,6 @@
 # Production readiness
 
-For omp-mmdb 2.0.0, continue the existing candidate series with `v2.0.0-rc.N` where `N` is at least 2 without leading zeros. The first redesigned omp-mmdb candidate is `v2.0.0-rc.2`. The existing `v2.0.0-rc.1` tag identifies the historical Maxora candidate and must not be moved, deleted or reused. The records under `docs/validation/` describe the earlier source and packages. [Maxora candidate source](https://github.com/itskoleban/omp-mmdb/tree/v2.0.0-rc.1)
+For omp-mmdb 2.0.0, use candidate tags `v2.0.0-rc.N`, where `N` is a positive integer without leading zeros. The first candidate is `v2.0.0-rc.1`. A former Maxora candidate tag with the same name was deleted before this series started; the old candidate's source remains in Git history. Historical records under `docs/validation/` describe the earlier source and packages.
 
 Dispatch the [candidate workflow](../.github/workflows/candidate.yml) on the existing omp-mmdb candidate tag with `publish v2.0.0 candidate`. Candidate packages use version `2.0.0` in ZIP filenames and manifests. Stable publication under `v2.0.0` promotes the exact verified candidate ZIP and checksum files.
 
