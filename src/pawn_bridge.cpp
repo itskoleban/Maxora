@@ -25,7 +25,9 @@ public:
 		const auto address = reinterpret_cast<std::uintptr_t>(pointer);
 		if (address < base || address - base > static_cast<std::uintptr_t>(std::numeric_limits<cell>::max()))
 			return false;
-		return cells(static_cast<cell>(address - base), count) == pointer;
+		const auto offset = static_cast<cell>(address - base);
+		// The interpreter passes the parameter block at the saved stack pointer.
+		return offset == amx_->stk && cells(offset, count) == pointer;
 	}
 	cell* cells(cell address, std::size_t count = 1) const noexcept {
 		if (!amx_ || address < 0 || address % 4 != 0 || count == 0 ||

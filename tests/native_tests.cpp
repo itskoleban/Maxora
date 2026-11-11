@@ -5,6 +5,7 @@
 #include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <set>
 #include <stdexcept>
 
@@ -65,18 +66,47 @@ int main() {
 		CHECK(native_count() == 18);
 
 		const auto is_loaded = native("mmdb_is_loaded").func;
-		a.data.back() = 2 * static_cast<cell>(sizeof(cell));
-		CHECK(static_cast<Status>(is_loaded(&a.amx, a.data.data() + a.data.size() - 1)) == Status::InvalidArgument);
-		a.at(16380) = 2 * static_cast<cell>(sizeof(cell));
-		CHECK(static_cast<Status>(is_loaded(&a.amx, &a.at(16380))) == Status::InvalidArgument);
-		const std::array<cell, 3> foreign_params{8, name, out};
-		CHECK(static_cast<Status>(is_loaded(&a.amx, foreign_params.data())) == Status::InvalidArgument);
-		const auto* misaligned = reinterpret_cast<const cell*>(a.amx.data + 1);
-		CHECK(static_cast<Status>(is_loaded(&a.amx, misaligned)) == Status::InvalidArgument);
+		constexpr auto cell_size = static_cast<cell>(sizeof(cell));
+		constexpr cell heap_block = 64;
+		const auto stack_start = a.amx.stk;
+		const std::array<cell, 3> params{2 * cell_size, name, out};
+		const auto call_is_loaded = [&](const cell* block) {
+			return static_cast<Status>(is_loaded(&a.amx, block));
+		};
+		const auto call_at = [&](cell address) {
+			auto* block = &a.at(address);
+			std::copy(params.begin(), params.end(), block);
+			return call_is_loaded(block);
+		};
+		a.string(name, "db");
+		a.at(out) = -1;
+		CHECK(call_at(heap_block) == Status::InvalidArgument && a.at(out) == -1);
+		CHECK(call_at(stack_start + cell_size) == Status::InvalidArgument && a.at(out) == -1);
+		CHECK(call_at(stack_start - cell_size) == Status::InvalidArgument && a.at(out) == -1);
+		CHECK(call_is_loaded(params.data()) == Status::InvalidArgument);
+		CHECK(call_is_loaded(nullptr) == Status::InvalidArgument);
+
+		a.amx.stk = a.amx.stp - 3 * cell_size;
+		CHECK(call_at(a.amx.stk) == Status::Ok && a.at(out) == 0);
+		a.at(a.amx.stk) = std::numeric_limits<cell>::max();
+		CHECK(call_is_loaded(&a.at(a.amx.stk)) == Status::InvalidArgument);
+		a.at(a.amx.stk) = params[0];
+		a.amx.stp -= cell_size;
+		CHECK(call_is_loaded(&a.at(a.amx.stk)) == Status::InvalidArgument);
+		a.amx.stp += cell_size;
+
+		a.amx.stk = stack_start + 1;
+		std::memcpy(a.amx.data + a.amx.stk, params.data(), params.size() * sizeof(cell));
+		const auto* misaligned = reinterpret_cast<const cell*>(a.amx.data + a.amx.stk);
+		CHECK(call_is_loaded(misaligned) == Status::InvalidArgument);
+		a.amx.stk = heap_block;
+		CHECK(call_at(heap_block) == Status::InvalidArgument);
+		a.amx.stk = -cell_size;
+		CHECK(call_at(heap_block) == Status::InvalidArgument);
+		a.amx.stk = stack_start;
 
 		const auto decoder = (std::filesystem::path(MMDB_FIXTURE_DIR) / "MaxMind-DB-test-decoder.mmdb").string();
 		const auto ipv4 = (std::filesystem::path(MMDB_FIXTURE_DIR) / "MaxMind-DB-test-ipv4-24.mmdb").string();
-		a.string(name, "db");
 		a.string(file, decoder);
 		a.string(ip, "1.1.1.1");
 		b.string(name, "db");
