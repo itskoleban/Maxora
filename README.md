@@ -56,6 +56,10 @@ During full server shutdown, MMDB native availability in `OnGameModeExit` and `O
 
 Pass a numeric IPv4 or IPv6 address and a JSON Pointer. For example, a dataset may use `/country/names/en` or `/country_code` for geographic data. `mmdb_has_record` checks coverage, and `mmdb_get_prefix` returns the matched network prefix in bits. `mmdb_get_text` preserves large integers as decimal and represents binary values as lowercase hexadecimal.
 
+## MaxMind Field Paths
+
+See the [MaxMind field path reference](docs/maxmind-fields.md) for common JSON Pointer paths, value types and Pawn reader functions, organized by City, Country, ASN, ISP and other MaxMind MMDB products. Fields depend on the database edition and the IP record; always handle missing values.
+
 ## Arrays and Maps
 
 Use `/subdivisions/0/names/en` for the first element of a nested array. `""` selects the root, `~0` represents `~` and `~1` represents `/` within a key. `mmdb_get_type` identifies a container, `mmdb_get_size` counts its children and `mmdb_has_field` checks a path.

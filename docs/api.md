@@ -2,6 +2,8 @@
 
 Include `<omp_mmdb>`. All natives return `MMDBStatus:`. The [public include](../include/omp_mmdb.inc) is the source for complete Pawn declarations.
 
+For provider-specific paths, data types and the appropriate query native, see the [MaxMind MMDB field path reference](maxmind-fields.md).
+
 ## Database management
 
 | Native | Parameters | Result on success |
