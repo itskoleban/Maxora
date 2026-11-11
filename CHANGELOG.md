@@ -11,7 +11,7 @@ The redesign used `0.1.0` during development. omp-mmdb 2.0.0 is incompatible wit
 - Use the reader's mapping ceiling in place of the 1 GiB policy limit.
 - Add namespace and snapshot stress coverage and compare the new API with the Maxora 2.0 baseline.
 
-## Maxora 2.0.0-rc.1 — historical prerelease
+## Maxora 2.0.0 candidate — historical development
 
 - Replace the legacy implementation with a C++17 service, RAII database ownership, script-owned generational resources and database snapshot lookup results.
 - Introduce an intentionally incompatible `Maxora_*` Pawn API with tagged database/result handles and explicit status codes.
@@ -20,7 +20,7 @@ The redesign used `0.1.0` during development. omp-mmdb 2.0.0 is incompatible wit
 - Add executable CTest suites, native boundary tests, real open.mp integration harness, sanitizer/fuzzer configurations and reproducible benchmarks.
 - Replace build-only publication with separate validation, candidate, artifact testing and fail-closed stable release gates; package documentation/licenses and SHA-256 manifests.
 
-The historical `v2.0.0-rc.1` tag retains the original Maxora commit. The validation record documents the original release assets. [Maxora release notes](docs/release-notes-v2.0.0.md) · [Tagged source](https://github.com/itskoleban/omp-mmdb/tree/v2.0.0-rc.1) · [Validation record](https://github.com/itskoleban/omp-mmdb/blob/4895916c055fb1a3da3173c6c7c637b3b3fee068/docs/validation/candidate-rc1.json)
+The former Maxora `v2.0.0-rc.1` tag was deleted without deleting its source history. That tag had no published GitHub Release; this section preserves the earlier development record, not an omp-mmdb release. [Maxora release notes](docs/release-notes-v2.0.0.md) · [Historical source commit](https://github.com/itskoleban/omp-mmdb/commit/c9c5fdd7470f67a93d39afbb3be41c96922eadc3) · [Validation record](https://github.com/itskoleban/omp-mmdb/blob/4895916c055fb1a3da3173c6c7c637b3b3fee068/docs/validation/candidate-rc1.json)
 
 ## 1.1.1 — 2026-07-24
 
