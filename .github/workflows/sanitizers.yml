@@ -8,6 +8,9 @@ jobs:
   sanitize:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
     env:
       CC: clang
       CXX: clang++
@@ -18,21 +21,21 @@ jobs:
         with:
           submodules: recursive
           persist-credentials: false
-      - run: cmake -S . -B build -G Ninja -DMAXORA_BUILD_COMPONENT=OFF -DMAXORA_SANITIZERS=ON -DMAXORA_BUILD_FUZZERS=ON -DCMAKE_BUILD_TYPE=Debug
+      - run: cmake -S . -B build -G Ninja -DMMDB_BUILD_COMPONENT=OFF -DMMDB_SANITIZERS=ON -DMMDB_BUILD_FUZZERS=ON -DCMAKE_BUILD_TYPE=Debug
       - run: cmake --build build --parallel 2
       - run: ctest --test-dir build --output-on-failure
       - name: Exercise parser inputs under libFuzzer
         run: |
           mkdir -p corpus artifacts/parser artifacts/native
           cp fuzz/corpus/* corpus/
-          build/maxora_parser_fuzz corpus -max_total_time=60 -max_len=4096 -artifact_prefix=artifacts/parser/ 2>&1 | tee parser-fuzz.log
+          build/omp_mmdb_parser_fuzz corpus -max_total_time=60 -max_len=4096 -artifact_prefix=artifacts/parser/ 2>&1 | tee parser-fuzz.log
       - name: Exercise Pawn native input boundaries under libFuzzer
         run: |
           mkdir -p native-corpus artifacts/native
           cp fuzz/native-corpus/* native-corpus/
-          build/maxora_native_fuzz native-corpus -max_total_time=60 -max_len=4096 -artifact_prefix=artifacts/native/ 2>&1 | tee native-fuzz.log
+          build/omp_mmdb_native_fuzz native-corpus -max_total_time=60 -max_len=4096 -artifact_prefix=artifacts/native/ 2>&1 | tee native-fuzz.log
       - name: Sustained mixed workload under sanitizers
-        run: build/maxora_benchmark --seconds 30 > sanitizer-stress.jsonl
+        run: build/omp_mmdb_benchmark --seconds 30 > sanitizer-stress.jsonl
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:
@@ -42,4 +45,30 @@ jobs:
             parser-fuzz.log
             native-fuzz.log
             artifacts/
+            build/Testing/Temporary/LastTest.log
+  thread-sanitize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CC: clang-18
+      CXX: clang++-18
+      TSAN_OPTIONS: halt_on_error=1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Set a compatible ASLR entropy for the TSan shadow mapping
+        run: sudo sysctl vm.mmap_rnd_bits=28
+      - run: cmake -S . -B build -G Ninja -DMMDB_BUILD_COMPONENT=OFF -DMMDB_THREAD_SANITIZER=ON -DCMAKE_BUILD_TYPE=Debug
+      - run: cmake --build build --parallel 2
+      - run: ctest --test-dir build --output-on-failure
+      - name: Exercise concurrent replacement under TSan
+        run: build/omp_mmdb_benchmark --seconds 30 > tsan-stress.jsonl
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: thread-sanitizer-evidence
+          path: |
+            tsan-stress.jsonl
             build/Testing/Temporary/LastTest.log

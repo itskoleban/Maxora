@@ -1,0 +1,91 @@
+{
+  "source_commit": null,
+  "candidate_tag": null,
+  "package_sha256": {
+    "windows-x86": null,
+    "linux-x86": null
+  },
+  "gates": {
+    "windows_x86_build": {
+      "status": "pending",
+      "source_commit": null,
+      "evidence": null
+    },
+    "linux_x86_build": {
+      "status": "pending",
+      "source_commit": null,
+      "evidence": null
+    },
+    "windows_x86_runtime": {
+      "status": "pending",
+      "source_commit": null,
+      "evidence": null
+    },
+    "linux_x86_runtime": {
+      "status": "pending",
+      "source_commit": null,
+      "evidence": null
+    },
+    "unit_native_tests": {
+      "status": "pending",
+      "source_commit": null,
+      "evidence": null
+    },
+    "asan_ubsan": {
+      "status": "pending",
+      "source_commit": null,
+      "evidence": null
+    },
+    "tsan": {
+      "status": "pending",
+      "source_commit": null,
+      "evidence": null
+    },
+    "fuzz": {
+      "status": "pending",
+      "source_commit": null,
+      "evidence": null
+    },
+    "stress": {
+      "status": "pending",
+      "source_commit": null,
+      "evidence": null
+    },
+    "benchmark_review": {
+      "status": "pending",
+      "source_commit": null,
+      "evidence": null
+    },
+    "documentation_examples": {
+      "status": "pending",
+      "source_commit": null,
+      "evidence": null
+    },
+    "package_verification": {
+      "status": "pending",
+      "source_commit": null,
+      "evidence": null
+    },
+    "release_candidate_artifacts": {
+      "status": "pending",
+      "source_commit": null,
+      "evidence": null
+    },
+    "security_review": {
+      "status": "pending",
+      "source_commit": null,
+      "evidence": null
+    }
+  },
+  "soak": {
+    "status": "pending",
+    "source_commit": null,
+    "duration_seconds": 0,
+    "environment": null,
+    "workload": null,
+    "evidence": null
+  },
+  "unresolved_critical_high": null,
+  "reviewer": null,
+  "reviewed_at": null
+}

@@ -1,83 +1,70 @@
 # Pawn API reference
 
-Include `maxora.inc` with `#include <maxora>`. All natives return the tagged `MaxoraStatus`; **MAXORA_OK is 0**. Database and lookup handles use `MaxoraDb` and `MaxoraResult` tags, with zero invalid. No 1.x natives are provided. All resource access is owned by the calling script and synchronous on the Pawn execution thread.
+Include `<omp_mmdb>`. All natives return `MMDBStatus:`. The [public include](../include/omp_mmdb.inc) is the source for complete Pawn declarations.
 
-## Resource operations
+## Database management
 
-| Native | Behavior |
-| --- | --- |
-| `Maxora_Load(const path[], &MaxoraDb:database)` | Opens a regular local MMDB file and writes a new database handle on success. Public Pawn path limit: 4,095 UTF-8 bytes. |
-| `Maxora_Reload(MaxoraDb:database, const path[])` | Opens and validates replacement before swapping; failure preserves existing mapping. Existing results retain their old snapshots. |
-| `Maxora_Unload(MaxoraDb:database)` | Invalidates database handle; outstanding results remain readable. |
-| `Maxora_IsValid(MaxoraDb:database, &bool:valid)` | Returns OK and sets false for an expired/invalid/wrong-kind handle. A live other-script handle returns WRONG_OWNER without writing output. |
-| `Maxora_Lookup(MaxoraDb:database, const ip[], &MaxoraResult:result)` | Strict numeric IPv4/IPv6 lookup; writes a reusable result handle. NO_RECORD means no matching entry. Release it after use. |
-| `Maxora_Release(MaxoraResult:result)` | Invalidates result and releases snapshot reference. |
+| Native | Parameters | Result on success |
+|---|---|---|
+| `mmdb_load` | `name, file` | Open a local file under a new name |
+| `mmdb_reload` | `name, file` | Open and validate a replacement before swapping it in |
+| `mmdb_unload` | `name` | Release the named database |
+| `mmdb_is_loaded` | `name, &bool:loaded` | Write whether this script has that name |
 
-Script unload releases its resources automatically. Filterscripts cannot access another script's handles. Reset preserves active-script resources because of open.mp's gamemode initialization ordering. Component shutdown releases everything. Do not persist handles across process restarts.
+Names contain 1–63 ASCII letters, digits, underscores, hyphens or dots. Names are case-sensitive. File paths are unpacked UTF-8 strings of 1–4,095 bytes, relative to the server working directory or absolute. Use server-controlled filenames. Each script can open up to 64 databases at a time, with a component-wide limit of 4,095 active databases. Releasing an entry makes capacity available again.
 
-## Field operations
+## Queries
 
-| Native | Accepted type and output |
-| --- | --- |
-| `Maxora_GetString(MaxoraResult:result, const path[], destination[], capacity, &required)` | Valid UTF-8 without embedded NUL, copied as unpacked byte cells. |
-| `Maxora_GetInt(MaxoraResult:result, const path[], &value)` | int32 or unsigned integer that fits signed 32-bit Pawn cell; otherwise OUT_OF_RANGE. |
-| `Maxora_GetFloat(MaxoraResult:result, const path[], &Float:value)` | MMDB float or double; finite binary32 conversion, with precision rounding; nonfinite/overflow/underflow rejected. |
-| `Maxora_GetBoolean(MaxoraResult:result, const path[], &bool:value)` | Boolean only; no truthiness coercion. |
-| `Maxora_GetText(MaxoraResult:result, const path[], destination[], capacity, &required)` | Exact decimal for uint16/32/64/128 and int32; lowercase hexadecimal for bytes, limited to 32,767 source bytes. |
-| `Maxora_GetType(MaxoraResult:result, const path[], &MaxoraType:type)` | Logical MMDB type; map and array supported. |
-| `Maxora_GetSize(MaxoraResult:result, const path[], &size)` | Map pair count, array element count, string byte count or bytes length. Scalar types fail TYPE_MISMATCH. |
-| `Maxora_HasField(MaxoraResult:result, const path[], &bool:exists)` | Missing field returns OK and false. Malformed paths and decoder errors propagate. |
-| `Maxora_GetPrefix(MaxoraResult:result, &prefix)` | Address-family prefix length (0..32 IPv4, 0..128 IPv6). |
+| Native | Parameters | Result on success |
+|---|---|---|
+| `mmdb_has_record` | `name, ip, &bool:exists` | Write whether the address matches a record |
+| `mmdb_has_field` | `name, ip, path, &bool:exists` | Write whether the matched record contains the path |
+| `mmdb_get_string` | `name, ip, path, destination, capacity, &required` | Copy the UTF-8 string |
+| `mmdb_get_int` | `name, ip, path, &value` | Write a signed 32-bit cell from an integer field |
+| `mmdb_get_float` | `name, ip, path, &Float:value` | Write an MMDB float or double as a Pawn Float |
+| `mmdb_get_bool` | `name, ip, path, &bool:value` | Write an MMDB boolean |
+| `mmdb_get_text` | `name, ip, path, destination, capacity, &required` | Copy an integer as decimal or bytes as lowercase hex |
+| `mmdb_get_type` | `name, ip, path, &MMDBType:type` | Write the format's value type |
+| `mmdb_get_size` | `name, ip, path, &size` | Write the array length, map pair count, UTF-8 byte count or binary byte count |
+| `mmdb_get_prefix` | `name, ip, &prefix` | Write the prefix length for the address family supplied |
 
-Paths use JSON Pointer: `""` is the record root, `/country/iso_code` selects map keys, `/subdivisions/0/iso_code` selects an array entry. `~0` encodes a literal tilde and `~1` a literal slash. Empty keys are supported. Paths are limited to 1,024 UTF-8 bytes and 32 tokens. libmaxminddb array semantics apply, including negative indices counted from the end. Map keys need not follow any GeoLite schema. This API does not enumerate unknown map keys or serialize whole containers.
+Use numeric IPv4 or IPv6 without brackets, ports, CIDR suffixes or IPv6 zone identifiers. Paths are JSON Pointers up to 1,024 bytes and 32 tokens. Array indices are zero-based decimal digits with no leading zeros unless the index is `0`. Use `~0` for a tilde and `~1` for a slash inside a token.
 
-Type values: STRING=2, DOUBLE=3, BYTES=4, UINT16=5, UINT32=6, MAP=7, INT32=8, UINT64=9, UINT128=10, ARRAY=11, BOOLEAN=14, FLOAT=15, exposed as `MAXORA_TYPE_*`.
+`mmdb_get_int` accepts `int32` and unsigned integer types whose value fits a signed cell. `mmdb_get_text` preserves all integer values including `uint128`. Binary output uses two hexadecimal digits per byte, preserves zero bytes and supports up to 32,767 input bytes per call. Pawn strings cannot represent embedded NULs. `mmdb_get_string` validates UTF-8 and supports up to 1,048,575 source bytes. `mmdb_get_float` rejects non-finite values and magnitude outside the finite nonzero Pawn Float range. Double values within range round to the precision of a Pawn Float.
 
 ## Metadata and diagnostics
 
-| Native | Output |
-| --- | --- |
-| `Maxora_GetDatabaseType(MaxoraDb:database, destination[], capacity, &required)` | Database edition/type metadata. |
-| `Maxora_GetBuildEpoch(MaxoraDb:database, destination[], capacity, &required)` | Exact unsigned decimal timestamp, avoiding signed-cell timestamp overflow. |
-| `Maxora_GetIpVersion(MaxoraDb:database, &version)` | Metadata IP version 4 or 6. |
-| `Maxora_GetStatusMessage(MaxoraStatus:status, destination[], capacity, &required)` | Pure English description of supplied status; invalid enum values fail INVALID_ARGUMENT. No shared last-error state. |
+| Native | Parameters | Result on success |
+|---|---|---|
+| `mmdb_get_database_type` | `name, destination, capacity, &required` | The database type string from the file |
+| `mmdb_get_build_epoch` | `name, destination, capacity, &required` | Exact unsigned decimal Unix seconds |
+| `mmdb_get_ip_version` | `name, &version` | `4` or `6` |
+| `mmdb_get_status_message` | `status, destination, capacity, &required` | A description of the supplied status |
 
-## String output and boundary contract
+## Error handling
 
-Capacity is the true destination array length **in cells**, including terminator. Its allowed range is 1..1,048,576. Required includes the terminator. On OK the complete value and required length are written. On BUFFER_TOO_SMALL only required is written; destination remains unchanged. No native truncates with success. Required must not overlap destination. Other failures leave outputs unchanged. Input/output logical arrays and output references should be distinct.
+Use unpacked Pawn strings. For every text output, `capacity` counts cells including the terminator and must be between 1 and 1,048,576. `required` must be a separate cell outside the destination. On success, `required` receives the length including the terminator. On `MMDB_BUFFER_TOO_SMALL`, only `required` changes. Other failures leave output arguments unchanged. The component checks spans against live AMX memory. Pass the actual size of the Pawn array because the VM does not expose the length of each allocation to the native.
 
-Packed Pawn strings are rejected. Strings must be unpacked cells containing UTF-8 byte values 0..255 and a NUL terminator. Native argument counts, address alignment, allocated AMX ranges, references, bounded reads, and writable spans are checked. AMX does not expose source-level array bounds: passing a false capacity can still overwrite an adjacent script variable within allocated AMX memory. Always use `sizeof destination`.
+`mmdb_is_loaded` writes false for an absent name. `mmdb_has_record` writes false when a loaded database has no matching network. `mmdb_has_field` writes false when an existing record lacks the field and returns `MMDB_NO_RECORD` for an unmatched IP. Invalid input and database errors are reported as statuses.
 
-## Status codes
-
-| Constant | Value | Meaning |
-| --- | --- | --- |
-| MAXORA_OK | 0 | Operation completed. |
-| MAXORA_INVALID_ARGUMENT | 1 | Argument count, reference, range, capacity, string representation or file path invalid. |
-| MAXORA_INVALID_HANDLE | 2 | Expired, invalid or wrong-kind resource handle. |
-| MAXORA_WRONG_OWNER | 3 | Live resource belongs to another script. |
-| MAXORA_INVALID_IP | 4 | Not a strict numeric IPv4/IPv6 literal. |
-| MAXORA_INVALID_PATH | 5 | Malformed or excessive field path. |
-| MAXORA_OPEN_FAILED | 6 | Missing, unreadable or nonregular file. |
-| MAXORA_INVALID_DATABASE | 7 | Invalid structure or metadata, empty or oversized file. |
-| MAXORA_UNSUPPORTED_DATABASE | 8 | libmaxminddb does not recognize the format. |
-| MAXORA_NO_RECORD | 9 | Address has no matching record. |
-| MAXORA_NO_FIELD | 10 | Path does not match data. |
-| MAXORA_TYPE_MISMATCH | 11 | Requested conversion does not accept this logical type. |
-| MAXORA_OUT_OF_RANGE | 12 | Conversion exceeds documented range/representation. |
-| MAXORA_BUFFER_TOO_SMALL | 13 | Complete output does not fit; required is available. |
-| MAXORA_INVALID_UTF8 | 14 | Invalid UTF-8 or embedded NUL in a database string. |
-| MAXORA_RESOURCE_LIMIT | 15 | Owner/global quota or handle-generation domain exhausted. |
-| MAXORA_DECODER_ERROR | 16 | Decoder detected invalid database data/tree. |
-| MAXORA_INTERNAL_ERROR | 17 | Unexpected C++ failure, caught at native boundary. |
-| MAXORA_UNSUPPORTED_FAMILY | 18 | IPv6 queried against IPv4-only database. |
-
-Input checks precede operations where required for memory safety; do not depend on which error wins when several inputs are invalid. Successful calls do not erase any last-error record because none exists.
-
-## Edition-specific stock helpers
-
-`Maxora_GetCountryCode`, `Maxora_GetCityName`, `Maxora_GetSubdivisionCode` and `Maxora_GetOrganization` take `(result, destination, capacity, &required)` and delegate to GetString. City name uses English. `Maxora_GetASN(result, &value)` delegates to GetInt and may reject an ASN above signed-cell range; use GetText on `/autonomous_system_number` for its exact decimal representation. `Maxora_GetLatitude` and `Maxora_GetLongitude` take `(result, &Float:value)` and delegate to GetFloat. No helper guarantees that its field exists in any particular record. Use generic paths for alternate languages or database editions.
-
-The declarations and helper bodies are also documented in [maxora.inc](../include/maxora.inc). [geolocation.pwn](../examples/geolocation.pwn) demonstrates load, query, checked output and cleanup.
-
-String extraction is bounded to 1,048,575 database bytes before UTF-8 validation; larger strings return OUT_OF_RANGE. GetSize can inspect their length without copying. This caps selected string validation/copy work independently of the database file size.
+| Status | Meaning |
+|---|---|
+| `MMDB_OK` | Operation succeeded |
+| `MMDB_INVALID_ARGUMENT` | Invalid native argument, name, file path or AMX memory span |
+| `MMDB_NOT_LOADED` | This script has no database with that name |
+| `MMDB_ALREADY_LOADED` | The name exists in this script |
+| `MMDB_INVALID_IP` | The address is invalid |
+| `MMDB_INVALID_PATH` | Invalid JSON Pointer syntax or array index |
+| `MMDB_OPEN_FAILED` | A local regular file could not be opened or mapped |
+| `MMDB_INVALID_DATABASE` | File layout or metadata failed validation |
+| `MMDB_UNSUPPORTED_DATABASE` | The reader rejected the format version or record width |
+| `MMDB_NO_RECORD` | The database has no matching network |
+| `MMDB_NO_FIELD` | The record has no matching field |
+| `MMDB_TYPE_MISMATCH` | The requested operation does not accept that value type |
+| `MMDB_OUT_OF_RANGE` | The value or file exceeds the supported representation |
+| `MMDB_BUFFER_TOO_SMALL` | A valid destination is too small |
+| `MMDB_INVALID_UTF8` | Text contains invalid UTF-8 or an embedded NUL |
+| `MMDB_RESOURCE_LIMIT` | An active database limit or a reader allocation limit was reached |
+| `MMDB_DECODER_ERROR` | An error occurred while reading the record |
+| `MMDB_INTERNAL_ERROR` | A C++ exception was contained at the native boundary |
+| `MMDB_UNSUPPORTED_FAMILY` | An IPv6 query was made against an IPv4-only database |

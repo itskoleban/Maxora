@@ -1,0 +1,49 @@
+{
+  "status": "passed",
+  "component_sha256": "70bd31914007a0266c2e48e8c9a3f7a478de9559df509211bbc3fecf3d9759a1",
+  "requested_workload_seconds": 10.0,
+  "runtime": "open.mp v1.6.7.3218",
+  "platform": "nt",
+  "log": "ci-windows-providers.log",
+  "workload": "Every 100 ms: 100 direct integer queries, missing field, IPv6 prefix, missing IPv4 record. Every 10 ticks: reload, failed reload, unload and reuse a name.",
+  "memory_measurement": "resident process memory sampled once per second; not an allocation count",
+  "runtime_archive_sha256": "db44b6cedc78e79fa4c7470ec81186ad9e880ad34529ae78fddfea70ec603223",
+  "provider_files": {
+    "dbip-city": {
+      "bytes": 126873350,
+      "sha256": "5f64491f77c2c78b56cd83a88db4ea6c4666874322da38805498bbb754ccc735"
+    },
+    "ipinfo-lite": {
+      "bytes": 3301,
+      "sha256": "4f8a5824a59952a97684b256aeac632ac9fd2b1ecab15fedfe60fbf492e2fbb7"
+    }
+  },
+  "workload_seconds": 10.04326929996023,
+  "markers": {
+    "MMDB_MAIN_PASS": 2,
+    "MMDB_AFTER_RESET_PASS": 2,
+    "MMDB_SIDE_PASS": 3,
+    "MMDB_SIDE_EXIT": 3,
+    "MMDB_SOAK_TICK": 10,
+    "MMDB_SIDE_CLEANUP_PASS": 2,
+    "MMDB_MAIN_CLEANUP_PASS": 1,
+    "MMDB_WORKLOAD_FINISHED": 1,
+    "MMDB_DBIP_PASS": 2,
+    "MMDB_IPINFO_PASS": 2
+  },
+  "minimum_completed_direct_queries": 9000,
+  "resident_memory_samples": 10,
+  "first_resident_bytes": 60567552,
+  "last_resident_bytes": 60567552,
+  "maximum_sampled_resident_bytes": 60567552,
+  "final_24h_soak_passed": false,
+  "exit_code": 0,
+  "lifecycle_checks": [
+    "initial gamemode and filterscript",
+    "filterscript reload/unload/load",
+    "same name isolated across scripts",
+    "GMX and post-reset lookup",
+    "graceful shutdown"
+  ],
+  "total_elapsed_seconds": 22.581120499991812
+}

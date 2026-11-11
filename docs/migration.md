@@ -1,12 +1,18 @@
-# Migration from Maxora 1.x
+# Migrating from Maxora
 
-Version 2.0.0 is a new implementation with a new API. The v1 source, tags and releases remain in Git history. Do not mix `maxora.inc` from v1 and a v2 component.
+Replace `Maxora.dll` or `Maxora.so` in `components/` with `MMDB.dll` or `MMDB.so`. Replace `#include <maxora>` with `#include <omp_mmdb>` and recompile all affected gamemodes and filterscripts.
 
-Replace `MMDB_*` calls with the `Maxora_*` interface documented in [api.md](api.md). All fallible operations return an explicit status; success is zero. Database and lookup handles have distinct Pawn tags. Open a database into an output reference, perform one lookup and extract multiple fields from its result handle, then release that result. Paths use JSON Pointer (`/country/iso_code`) instead of dotted paths. Escape `~` as `~0` and `/` inside keys as `~1`.
+| Previous API | omp-mmdb |
+|---|---|
+| Maxora 1.x `MMDB_Load` or 2.0 RC `Maxora_Load` returning or writing a handle | `mmdb_load("city", file)` returns `MMDBStatus:` |
+| Database handle checks | `mmdb_is_loaded("city", loaded)` |
+| 2.0 RC `Maxora_Lookup` and a subsequent field read | `mmdb_get_string("city", ip, path, destination, capacity, required)` |
+| 2.0 RC `Maxora_Release` | Remove the call and the result variable |
+| 1.x dot-delimited paths | Convert to JSON Pointers, such as `/country/names/en` |
+| 2.0 RC negative array indexes such as `/array/-1` | Use `mmdb_get_size` and construct a zero-based index such as `size - 1` for the last item |
+| Provider helpers | Use the field path from the provider's schema |
+| 1.x last error | Check the native's return status and use `mmdb_get_status_message` |
 
-Resources are script-owned. Another gamemode or filterscript cannot use or unload the owner's handles. Script unload releases its resources; server reset invalidates all resources. Store each handle only while its owner remains active. Unloading a database invalidates its table handle. Reload retains the handle and switches future lookups to the replacement; existing lookup snapshots retain their original database safely until released. Review the reload contract in the API reference.
+Every native returns `MMDB_OK` (zero) on success. Maxora 1.x used a nonzero success value. Pass the database name and IP to each field read. Multiple queries for one IP perform independent lookups against the current mapping. Each script must load its own names, even when scripts read the same file.
 
-Remove the global last-error pattern. Check each native's returned status directly; no unrelated script can overwrite that result. Distinguish no record, no field, wrong type, small output buffer and numeric range failure. Strings must fit with their terminator; retry with a larger Pawn array after `MAXORA_BUFFER_TOO_SMALL`, and never treat partially filled output as successful.
-
-Review application behavior for IPv6, missing database fields, and full-range ASN values that exceed signed 32-bit Pawn cells. Use textual integer extraction for values outside the Pawn integer range. The component does not automatically fall back between unrelated MMDB editions or acquire replacement databases.
-
+Old AMX binaries depend on their original native names. Preserve the original component for deployments still running them. Source and assets for Maxora remain available from the historical tags.
