@@ -30,4 +30,10 @@ The stage contains the component under `components/` and the Pawn header under `
 
 For Linux Clang, use `-DMMDB_SANITIZERS=ON -DMMDB_BUILD_FUZZERS=ON -DMMDB_BUILD_COMPONENT=OFF`, then run CTest and the `omp_mmdb_parser_fuzz` and `omp_mmdb_native_fuzz` targets with copies of the seed corpora. Use `-DMMDB_THREAD_SANITIZER=ON` in a separate build. ThreadSanitizer covers concurrent immutable snapshots during replacement.
 
+## Real-server lifecycle integration
+
 The [build workflow](../.github/workflows/build.yml) compiles the pinned Pawn compiler and uses the [integration runner](../scripts/openmp_integration.py) to compile the example and run the packaged component under real open.mp. [Fixture provenance](../tests/FIXTURES.md).
+
+The integration records MMDB status codes inside the exit callbacks for filterscript reload and ordinary unload, and for `gmx`. It checks that replacement scripts start with empty namespaces and that the server exits normally. The store test checks that detaching one script releases its mapping and that clearing the service releases the remaining mappings when no snapshot owns them.
+
+With the digest-verified open.mp v1.6.7.3218 archive, the runner also checks that `mmdb_is_loaded` and `mmdb_get_ip_version` return `MMDB_INVALID_ARGUMENT` in both callbacks during full server shutdown. This is an observation for that archive. The [public contract](api.md#database-management) leaves native availability during full shutdown unspecified. Runs with `--server-dir` skip the final native probes and still require a clean exit.

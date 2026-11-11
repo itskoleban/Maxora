@@ -119,6 +119,30 @@ void test_snapshot_during_reload() {
 	CHECK(valid && service.size() == 0);
 }
 
+void test_mapping_release_on_detach_and_clear() {
+	Service service;
+	int gamemode = 0, filterscript = 0;
+	const auto decoder = fixture("MaxMind-DB-test-decoder.mmdb");
+	CHECK(service.attach(&gamemode) == Status::Ok);
+	CHECK(service.attach(&filterscript) == Status::Ok);
+	CHECK(service.load(&gamemode, "shared", decoder) == Status::Ok);
+	CHECK(service.load(&filterscript, "shared", decoder) == Status::Ok);
+	std::weak_ptr<const Database> gamemode_mapping, filterscript_mapping;
+	{
+		std::shared_ptr<const Database> mapping;
+		CHECK(service.database(&gamemode, "shared", mapping) == Status::Ok);
+		gamemode_mapping = mapping;
+		CHECK(service.database(&filterscript, "shared", mapping) == Status::Ok);
+		filterscript_mapping = mapping;
+	}
+	service.detach(&gamemode);
+	CHECK(gamemode_mapping.expired());
+	CHECK(!filterscript_mapping.expired());
+	service.clear();
+	CHECK(filterscript_mapping.expired());
+	CHECK(service.size() == 0);
+}
+
 } // namespace
 
 int main() {
@@ -126,6 +150,7 @@ int main() {
 		test_names_and_transaction();
 		test_active_limits_and_reuse();
 		test_snapshot_during_reload();
+		test_mapping_release_on_detach_and_clear();
 		std::cout << "Database namespace, transaction and snapshot tests passed\n";
 		return 0;
 	} catch (const std::exception& error) {
