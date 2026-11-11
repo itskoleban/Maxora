@@ -20,10 +20,10 @@ void check(bool value, int line) {
 
 constexpr cell name = 0, file = 512, ip = 2048, path = 3072, out = 4108, text = 5000;
 
-const AMX_NATIVE_INFO& native(const char* name) {
+const AMX_NATIVE_INFO& native(const char* function) {
 	for (int i = 0; i < native_count(); ++i)
-		if (std::strcmp(native_table()[i].name, name) == 0) return native_table()[i];
-	throw std::runtime_error(std::string("Missing native ") + name);
+		if (std::strcmp(native_table()[i].name, function) == 0) return native_table()[i];
+	throw std::runtime_error(std::string("Missing native ") + function);
 }
 
 struct Vm {

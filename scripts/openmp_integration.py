@@ -61,6 +61,8 @@ def main():
 	parser.add_argument("--pawncc", type=Path)
 	parser.add_argument("--package-dir", type=Path, help="Use the installed include and example from this package tree")
 	parser.add_argument("--port", type=int, default=17779)
+	parser.add_argument("--dbip-city", type=Path, help="Uncompressed DB-IP City Lite provider file")
+	parser.add_argument("--ipinfo-lite", type=Path, help="Uncompressed official IPinfo Lite sample")
 	parser.add_argument("--duration", type=float, default=10)
 	parser.add_argument("--evidence", required=True, type=Path)
 	args = parser.parse_args()
@@ -120,13 +122,30 @@ def main():
 			shutil.copy2(fixture / "MaxMind-DB-test-decoder.mmdb", runtime / "scriptfiles/decoder.mmdb")
 			shutil.copy2(fixture / "MaxMind-DB-test-ipv4-24.mmdb", runtime / "scriptfiles/ipv4.mmdb")
 			shutil.copy2(fixture / "MaxMind-DB-test-ipv6-24.mmdb", runtime / "scriptfiles/ipv6.mmdb")
+			shutil.copy2(fixture / "MaxMind-DB-test-nested.mmdb", runtime / "scriptfiles/nested.mmdb")
 			(runtime / "scriptfiles/truncated.mmdb").write_bytes((fixture / "MaxMind-DB-test-decoder.mmdb").read_bytes()[:32])
+			provider_files = {}
+			provider_flags = []
+			provider_markers = []
+			for name, supplied, define, marker in (
+				("dbip-city", args.dbip_city, "MMDB_TEST_DBIP_CITY", "MMDB_DBIP_PASS"),
+				("ipinfo-lite", args.ipinfo_lite, "MMDB_TEST_IPINFO_LITE", "MMDB_IPINFO_PASS"),
+			):
+				if supplied is None:
+					continue
+				target = runtime / "scriptfiles" / (name + ".mmdb")
+				shutil.copy2(supplied.resolve(), target)
+				provider_files[name] = {"bytes": target.stat().st_size, "sha256": sha256(target)}
+				provider_flags.append(define + "=1")
+				provider_markers.append(marker)
+			result["provider_files"] = provider_files
 			for source, target in ((root / "tests/pawn/integration.pwn", runtime / "gamemodes/mmdb_test.amx"),
 								   (root / "tests/pawn/side.pwn", runtime / "filterscripts/mmdb_side.amx"),
 								   (package_root / "examples/geolocation.pwn", temporary / "geolocation.amx")):
 				compiled = subprocess.run([str(compiler), str(source), "-i" + str(package_root / "include"),
 										   "-i" + str(runtime / "qawno/include"), "-t4", "-o" + str(target), "-d3", "-E+",
-										   "MMDB_TEST_DURATION_MS=" + str(int(args.duration * 1000))], cwd=runtime,
+										   "MMDB_TEST_DURATION_MS=" + str(int(args.duration * 1000)),
+										   *provider_flags], cwd=runtime,
 										  capture_output=True, text=True, creationflags=0x08000000 if os.name == "nt" else 0)
 				if compiled.returncode:
 					raise RuntimeError("Pawn compile failed: " + compiled.stdout + compiled.stderr)
@@ -175,6 +194,7 @@ def main():
 					  "MMDB_SIDE_PASS": 0, "MMDB_SIDE_EXIT": 0, "MMDB_SOAK_TICK": 0,
 					  "MMDB_SIDE_CLEANUP_PASS": 0, "MMDB_MAIN_CLEANUP_PASS": 0,
 					  "MMDB_WORKLOAD_FINISHED": 0}
+			counts.update(dict.fromkeys(provider_markers, 0))
 			with log_path.open("w", encoding="utf-8") as log:
 				def drain():
 					while True:
@@ -202,6 +222,8 @@ def main():
 				# Windows where hidden-process wcin may not accept pipe input.
 				wait_for("MMDB_SIDE_PASS", 3)
 				wait_for("MMDB_AFTER_RESET_PASS", 2)
+				for marker in provider_markers:
+					wait_for(marker, 2)
 				if counts["MMDB_SIDE_CLEANUP_PASS"] < 2 or counts["MMDB_MAIN_CLEANUP_PASS"] < 1:
 					raise RuntimeError("script-owned resources were not proven invalid after unload")
 				workload_start = time.monotonic()

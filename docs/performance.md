@@ -36,10 +36,12 @@ mean and kept snapshot consistency for all three fields.
 
 Median process working set for the IPv4 trial was 7,180,288 bytes for Maxora
 and 7,278,592 bytes for omp-mmdb. These process readings include the C++
-runtime and benchmark's sampling storage. The standalone concurrent fixture
-smoke exercised 2,205 replacement opens during 9,000 mixed operations. Its
-query-under-reload workload measured 2,802 ns mean and 4,800 ns p99 on that
-run. The two-thread test publishes mappings independently of open.mp.
+runtime and benchmark's sampling storage. In a separate 60.0004-second mixed
+run, the benchmark completed 345,861 measured operations and 78,037 concurrent
+reloads, with eight live databases at the end. The query-under-reload workload
+measured 2,621 ns mean, 4,900 ns p99 and 33,200 ns p99.9. Peak process working
+set was 10,461,184 bytes. The two-thread test publishes mappings independently
+of open.mp. [Stress run JSONL](validation/omp-mmdb-windows-x86/windows-x86-stress.jsonl)
 
 [Paired trial summary](validation/omp-mmdb-windows-x86/comparison-summary.json),
 [paired raw measurements](validation/omp-mmdb-windows-x86/comparison-raw.jsonl)
@@ -82,6 +84,13 @@ which `is_global` is true, `is_multicast` is false, and the database's
 The list SHA-256 was
 `3359d8845888fafcb0858b7337a5755a0eaa6ffd28c09f5b0c3dd84638a0b31e`.
 Fresh-process runs used `--start-index` values `0, 251, …, 3765`.
+
+The Windows x86 open.mp v1.6.7.3218 integration also checked both providers
+before and after a gamemode restart. DB-IP City Lite returned `US` for
+`8.8.8.8` at `/country/iso_code`. The official IPinfo Lite sample returned
+`AU` and `AS13335` for `1.0.0.1` at `/country_code` and `/asn`. A typed
+integer read of that string ASN returned `MMDB_TYPE_MISMATCH`.
+[Provider integration evidence](validation/omp-mmdb-windows-x86/ci-windows-providers.json)
 
 ## Grouped field design
 

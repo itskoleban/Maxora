@@ -8,6 +8,7 @@ native SetModeRestartTime(Float:seconds);
 native SendRconCommand(const command[]);
 native SetSVarInt(const name[], value);
 native GetSVarInt(const name[]);
+native strcmp(const first[], const second[], bool:ignorecase, length);
 
 #if !defined MMDB_TEST_DURATION_MS
 	#define MMDB_TEST_DURATION_MS 10000
@@ -62,7 +63,9 @@ public OnGameModeInit()
 	Check(mmdb_get_type("shared", "1.1.1.1", "/map", type) == MMDB_OK && type == MMDB_TYPE_MAP, "map type");
 	Check(mmdb_get_size("shared", "1.1.1.1", "/array", value) == MMDB_OK && value == 3, "array size");
 	Check(mmdb_get_size("shared", "1.1.1.1", "/map", value) == MMDB_OK && value > 0, "map size");
-	Check(mmdb_get_string("shared", "1.1.1.1", "/map/mapX/utf8_string", text, sizeof text, required) == MMDB_OK, "nested map");
+	Check(mmdb_load("nested", "scriptfiles/nested.mmdb") == MMDB_OK, "nested map load");
+	Check(mmdb_get_int("nested", "1.1.1.1", "/map1/map2/array/0/map3/c", value) == MMDB_OK && value == 3, "nested map and array");
+	Check(mmdb_unload("nested") == MMDB_OK, "nested map unload");
 	Check(mmdb_has_field("shared", "1.1.1.1", "/missing", flag) == MMDB_OK && !flag, "missing field");
 	Check(mmdb_has_field("shared", "1.1.1.1", "/bad~2escape", flag) == MMDB_INVALID_PATH, "invalid escape");
 	Check(mmdb_get_prefix("shared", "1.1.1.1", value) == MMDB_OK, "prefix");
@@ -79,6 +82,23 @@ public OnGameModeInit()
 	Check(mmdb_reload("shared", DECODER) == MMDB_OK, "restore decoder");
 	Check(mmdb_load("v4", IPV4) == MMDB_OK, "IPv4 load");
 	Check(mmdb_load("v6", IPV6) == MMDB_OK, "IPv6 load");
+#if defined MMDB_TEST_DBIP_CITY
+	Check(mmdb_load("dbip", "scriptfiles/dbip-city.mmdb") == MMDB_OK, "DB-IP City Lite load");
+	Check(mmdb_get_string("dbip", "8.8.8.8", "/country/iso_code", text, sizeof text, required) == MMDB_OK &&
+		strcmp(text, "US", false, sizeof text) == 0, "DB-IP City Lite nested country code");
+	Check(mmdb_unload("dbip") == MMDB_OK, "DB-IP City Lite unload");
+	print("MMDB_DBIP_PASS");
+#endif
+#if defined MMDB_TEST_IPINFO_LITE
+	Check(mmdb_load("ipinfo", "scriptfiles/ipinfo-lite.mmdb") == MMDB_OK, "IPinfo Lite load");
+	Check(mmdb_get_string("ipinfo", "1.0.0.1", "/country_code", text, sizeof text, required) == MMDB_OK &&
+		strcmp(text, "AU", false, sizeof text) == 0, "IPinfo Lite flat country code");
+	Check(mmdb_get_string("ipinfo", "1.0.0.1", "/asn", text, sizeof text, required) == MMDB_OK &&
+		strcmp(text, "AS13335", false, sizeof text) == 0, "IPinfo Lite ASN string");
+	Check(mmdb_get_int("ipinfo", "1.0.0.1", "/asn", value) == MMDB_TYPE_MISMATCH, "IPinfo Lite strict ASN type");
+	Check(mmdb_unload("ipinfo") == MMDB_OK, "IPinfo Lite unload");
+	print("MMDB_IPINFO_PASS");
+#endif
 	print("MMDB_MAIN_PASS");
 	SetTimer("MMDBTestTick", 100, true);
 	return 1;
