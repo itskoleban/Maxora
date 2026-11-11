@@ -1,11 +1,9 @@
-# Security considerations
+# Input validation and operating assumptions
 
-The trust boundary includes Pawn native arguments and externally supplied database files. The component validates numeric IP input without DNS, bounds path parsing, checks AMX memory spans, enforces output capacity and checked numeric conversions, and returns explicit statuses. Handle generation and script ownership prevent stale-handle reuse and cross-script resource control. Lookup snapshots retain database mappings through reload/unload.
+Pawn natives validate the parameter block and output spans against the live AMX heap and stack. Inputs are bounded unpacked strings. Output arguments are written only after validation and a successful lookup or conversion, except for the required-length result on a short buffer. The native boundary contains C++ exceptions.
 
-The service runs synchronously on the open.mp main thread. Concurrent callers are unsupported. No background workers, network requests or global last-error state are introduced. Script resource limits bound live database/lookup handles. Database open and filesystem access can block; perform updates and initial loads outside latency-sensitive player callbacks where possible.
+File paths are trusted deployment inputs. Use regular files on local storage and protect the database directory against writes or replacement by untrusted users. Publish a new complete file under a new filename before loading it. Keep every mapped file immutable and avoid writing or truncating it in place. Concurrent modifications to mapped files are outside the reader contract and may cause OS-level faults.
 
-libmaxminddb is the database decoder. Opening validates metadata and basic file structure, not authenticity or every lazily decoded record. Use trusted database sources and separately verify download signatures or checksums. Mapped-file truncation can cause an operating-system access fault; never modify mapped files in place. Keep versioned database files until all active lookup snapshots release them.
+Open validates file layout and metadata. Individual records are decoded on demand through the pinned libmaxminddb reader. Corrupt input can fail at load time or return a decoder error at lookup time. Use provider checksums and an independently verified deployment source when available.
 
-Scripts execute within the server trust model: the API accepts operator-provided local filenames and does not implement a filesystem sandbox. Do not expose arbitrary database paths to players. Protect server/database directory permissions. Treat location data as approximate information, and avoid logging unnecessary IP addresses or making security authorization decisions from geolocation alone.
-
-Dependencies and GitHub Actions are pinned by Git commit where practical. Release publication uses minimum token scope, verifies package hashes, and requires commit-bound evidence. A successful build, sanitizer run or source review alone is not a claim of complete security. Report suspected problems privately to the repository owner; do not attach license-restricted databases or personal IP logs to public reports.
+The Pawn bridge and database registry belong to the server thread. Only immutable mappings with owned references may cross threads in C++ tests. See [architecture](architecture.md) for lifecycle constraints.
