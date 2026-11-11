@@ -21,11 +21,17 @@ class ReleaseGateTests(unittest.TestCase):
 		self.commit = "a" * 40
 		names = ("windows_x86_build", "linux_x86_build", "windows_x86_runtime", "linux_x86_runtime", "unit_native_tests", "asan_ubsan", "tsan", "fuzz", "stress", "benchmark_review", "documentation_examples", "package_verification", "release_candidate_artifacts", "security_review")
 		self.report = {"source_commit": self.commit, "gates": {name: {"status": "passed", "evidence": "https://example.test/run", "source_commit": self.commit} for name in names}, "soak": {"status": "passed", "source_commit": self.commit, "duration_seconds": 86400, "environment": "test-host", "workload": "documented", "evidence": "https://example.test/soak"}, "unresolved_critical_high": 0, "reviewer": "maintainer", "reviewed_at": "2026-11-02T00:00:00Z"}
-		self.report["candidate_tag"] = "v0.1.0-rc.1"
+		self.report["candidate_tag"] = "v2.0.0-omp-mmdb.rc.1"
 		self.report["package_sha256"] = {"windows-x86": "a" * 64, "linux-x86": "b" * 64}
 
 	def test_complete_reviewed_report(self):
 		self.assertEqual(GATE.check(self.report, self.commit), [])
+
+	def test_candidate_tag_must_use_the_omp_mmdb_namespace(self):
+		for tag in ("v2.0.0-rc.1", "v0.1.0-rc.1", "v2.0.0", "v2.0.0-omp-mmdb.rc.0", "v2.0.0-omp-mmdb.rc.01"):
+			with self.subTest(tag=tag):
+				self.report["candidate_tag"] = tag
+				self.assertTrue(GATE.check(self.report, self.commit))
 
 	def test_empty_report_fails(self):
 		self.assertTrue(GATE.check({}, self.commit))
@@ -69,10 +75,10 @@ class PackageVerificationTests(unittest.TestCase):
 	def setUp(self):
 		self.directory = tempfile.TemporaryDirectory()
 		self.addCleanup(self.directory.cleanup)
-		self.archive = pathlib.Path(self.directory.name) / "package.zip"
+		self.archive = pathlib.Path(self.directory.name) / "omp-mmdb-2.0.0-linux-x86.zip"
 		self.commit = "a" * 40
 
-	def package(self, files=None, version="0.1.0", bad_hash=False, platform="linux-x86"):
+	def package(self, files=None, version="2.0.0", bad_hash=False, platform="linux-x86"):
 		if files is None:
 			paths = ("components/MMDB.so", "include/omp_mmdb.inc", "LICENSE", "README.md", "CHANGELOG.md", "docs/production-readiness.md", "docs/api.md", "examples/geolocation.pwn", "licenses/libmaxminddb/LICENSE", "licenses/libmaxminddb/NOTICE", "licenses/open.mp-sdk/LICENSE.md")
 			files = {path: b"synthetic-test-content" for path in paths}
@@ -109,7 +115,12 @@ class PackageVerificationTests(unittest.TestCase):
 		self.assertNotEqual(self.verify().returncode, 0)
 
 	def test_wrong_version_is_rejected(self):
-		self.package(version="1.1.1")
+		self.package(version="0.1.0")
+		self.assertNotEqual(self.verify().returncode, 0)
+
+	def test_wrong_archive_name_is_rejected(self):
+		self.archive = self.archive.with_name("omp-mmdb-0.1.0-linux-x86.zip")
+		self.package()
 		self.assertNotEqual(self.verify().returncode, 0)
 
 	def test_missing_required_files_is_rejected(self):

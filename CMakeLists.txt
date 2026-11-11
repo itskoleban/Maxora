@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(omp-mmdb VERSION 0.1.0 LANGUAGES C CXX)
+project(omp-mmdb VERSION 2.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -97,6 +97,11 @@ if(MMDB_BUILD_COMPONENT)
 	set_property(TARGET OMP-SDK PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${MMDB_SDK_INCLUDES}")
 	add_library(omp_mmdb MODULE src/component.cpp src/pawn_bridge.cpp)
 	target_link_libraries(omp_mmdb PRIVATE omp_mmdb_pawn OMP-SDK)
+	target_compile_definitions(omp_mmdb PRIVATE
+		OMP_MMDB_VERSION="${PROJECT_VERSION}"
+		OMP_MMDB_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
+		OMP_MMDB_VERSION_MINOR=${PROJECT_VERSION_MINOR}
+		OMP_MMDB_VERSION_PATCH=${PROJECT_VERSION_PATCH})
 	set_target_properties(omp_mmdb PROPERTIES PREFIX "" OUTPUT_NAME "MMDB" CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 	omp_mmdb_target(omp_mmdb)
 	install(TARGETS omp_mmdb LIBRARY DESTINATION components RUNTIME DESTINATION components)

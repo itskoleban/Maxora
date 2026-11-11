@@ -1,4 +1,4 @@
-# Migrating from Maxora
+# Migrating from Maxora to omp-mmdb 2.0.0
 
 Replace `Maxora.dll` or `Maxora.so` in `components/` with `MMDB.dll` or `MMDB.so`. Replace `#include <maxora>` with `#include <omp_mmdb>` and recompile all affected gamemodes and filterscripts.
 

@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       authorization:
-        description: Run on the existing v0.1.0-rc.N tag and type publish v0.1.0 candidate
+        description: Run on the existing v2.0.0-omp-mmdb.rc.N tag and type publish v2.0.0 candidate
         required: true
         type: string
 permissions:
@@ -16,8 +16,8 @@ jobs:
         env:
           RELEASE_AUTHORIZATION: ${{ inputs.authorization }}
         run: |
-          test "$RELEASE_AUTHORIZATION" = 'publish v0.1.0 candidate'
-          [[ "$GITHUB_REF" =~ ^refs/tags/v0\.1\.0-rc\.[0-9]+$ ]]
+          test "$RELEASE_AUTHORIZATION" = 'publish v2.0.0 candidate'
+          [[ "$GITHUB_REF" =~ ^refs/tags/v2\.0\.0-omp-mmdb\.rc\.[1-9][0-9]*$ ]]
   compilation:
     needs: authorize
     uses: ./.github/workflows/build.yml
@@ -46,13 +46,13 @@ jobs:
           merge-multiple: true
       - name: Verify candidate package identity
         run: |
-          python scripts/verify_package.py dist/omp-mmdb-0.1.0-windows-x86.zip --commit "$GITHUB_SHA"
-          python scripts/verify_package.py dist/omp-mmdb-0.1.0-linux-x86.zip --commit "$GITHUB_SHA"
+          python scripts/verify_package.py dist/omp-mmdb-2.0.0-windows-x86.zip --commit "$GITHUB_SHA"
+          python scripts/verify_package.py dist/omp-mmdb-2.0.0-linux-x86.zip --commit "$GITHUB_SHA"
       - name: Publish explicitly marked prerelease
         env:
           GH_TOKEN: ${{ github.token }}
           RC_TAG: ${{ github.ref_name }}
-        run: gh release create "$RC_TAG" dist/* --verify-tag --prerelease --title "omp-mmdb $RC_TAG" --notes-file docs/release-notes-v0.1.0.md
+        run: gh release create "$RC_TAG" dist/omp-mmdb-2.0.0-{windows,linux}-x86.zip{,.sha256} --verify-tag --prerelease --title "omp-mmdb $RC_TAG" --notes-file docs/release-notes-omp-mmdb-v2.0.0.md
   artifact-test:
     needs: candidate
     strategy:
@@ -89,9 +89,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RC_TAG: ${{ github.ref_name }}
-        run: gh release download "$RC_TAG" --pattern 'omp-mmdb-0.1.0-${{ matrix.platform }}.zip*' --dir dist
-      - run: python scripts/verify_package.py dist/omp-mmdb-0.1.0-${{ matrix.platform }}.zip --commit "$GITHUB_SHA"
-      - run: python -m zipfile -e dist/omp-mmdb-0.1.0-${{ matrix.platform }}.zip rc
+        run: gh release download "$RC_TAG" --pattern 'omp-mmdb-2.0.0-${{ matrix.platform }}.zip*' --dir dist
+      - run: python scripts/verify_package.py dist/omp-mmdb-2.0.0-${{ matrix.platform }}.zip --commit "$GITHUB_SHA"
+      - run: python -m zipfile -e dist/omp-mmdb-2.0.0-${{ matrix.platform }}.zip rc
       - run: |
           cmake -S lib/compiler/source/compiler -B build-pawn -DCMAKE_C_FLAGS=-DPAWN_CELL_SIZE=32 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
           cmake --build build-pawn --config Release --parallel 2 --target pawncc

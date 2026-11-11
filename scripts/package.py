@@ -23,12 +23,12 @@ def main():
 		if not (args.stage / path).is_file():
 			raise SystemExit(f"Missing package input: {path}")
 	args.out.mkdir(parents=True, exist_ok=True)
-	manifest = {"project": "omp-mmdb", "version": "0.1.0", "commit": commit, "platform": args.platform, "files": {}}
+	manifest = {"project": "omp-mmdb", "version": "2.0.0", "commit": commit, "platform": args.platform, "files": {}}
 	for path in sorted(args.stage.rglob("*")):
 		if path.is_file() and path.name != "manifest.json":
 			manifest["files"][path.relative_to(args.stage).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
 	(args.stage / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-	target = args.out / f"omp-mmdb-0.1.0-{args.platform}.zip"
+	target = args.out / f"{manifest['project']}-{manifest['version']}-{args.platform}.zip"
 	stamp = time.gmtime(max(epoch, 315532800))[:6]
 	with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
 		for path in sorted(args.stage.rglob("*")):

@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       candidate_tag:
-        description: Exact prerelease tag; requires an existing trusted Linux x86-capable runner
+        description: Published v2.0.0-omp-mmdb.rc.N tag (requires a trusted Linux x86-capable runner)
         required: true
         type: string
 permissions:
@@ -22,14 +22,14 @@ jobs:
           RC_TAG: ${{ inputs.candidate_tag }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          [[ "$RC_TAG" =~ ^v0\.1\.0-rc\.[0-9]+$ ]]
+          [[ "$RC_TAG" =~ ^v2\.0\.0-omp-mmdb\.rc\.[1-9][0-9]*$ ]]
           git fetch origin "refs/tags/$RC_TAG:refs/tags/$RC_TAG"
           SHA=$(git rev-parse "refs/tags/$RC_TAG^{commit}")
           git checkout --detach "$SHA"
           git submodule update --init --recursive
-          gh release download "$RC_TAG" --pattern 'omp-mmdb-0.1.0-linux-x86.zip*' --dir dist
-          python3 scripts/verify_package.py dist/omp-mmdb-0.1.0-linux-x86.zip --commit "$SHA"
-          python3 -m zipfile -e dist/omp-mmdb-0.1.0-linux-x86.zip rc
+          gh release download "$RC_TAG" --pattern 'omp-mmdb-2.0.0-linux-x86.zip*' --dir dist
+          python3 scripts/verify_package.py dist/omp-mmdb-2.0.0-linux-x86.zip --commit "$SHA"
+          python3 -m zipfile -e dist/omp-mmdb-2.0.0-linux-x86.zip rc
       - name: Build pinned compiler and benchmark harness
         run: |
           cmake -S . -B build -G Ninja -DMMDB_BUILD_COMPONENT=OFF -DCMAKE_BUILD_TYPE=Release
