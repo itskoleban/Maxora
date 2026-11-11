@@ -27,9 +27,10 @@ def main():
 		for name in names:
 			require(not name.startswith("/") and ".." not in pathlib.PurePosixPath(name).parts and "\\" not in name and ":" not in name, "Unsafe archive member")
 		manifest = json.loads(archive.read("manifest.json"))
-		require(manifest.get("project") == "omp-mmdb" and manifest["version"] == "0.1.0" and manifest["commit"] == args.commit, "Wrong version/commit")
+		require(manifest.get("project") == "omp-mmdb" and manifest["version"] == "2.0.0" and manifest["commit"] == args.commit, "Wrong version/commit")
 		platform = manifest.get("platform")
 		require(platform in {"windows-x86", "linux-x86"}, "Unsupported package platform")
+		require(args.archive.name == f"{manifest['project']}-{manifest['version']}-{platform}.zip", "Unexpected archive filename")
 		binary = "MMDB.dll" if platform == "windows-x86" else "MMDB.so"
 		required = {f"components/{binary}", "include/omp_mmdb.inc", "LICENSE", "README.md", "CHANGELOG.md", "docs/production-readiness.md", "docs/api.md", "examples/geolocation.pwn", "licenses/libmaxminddb/LICENSE", "licenses/libmaxminddb/NOTICE", "licenses/open.mp-sdk/LICENSE.md"}
 		require(required.issubset(set(names)), "Required package binary, API, example, documentation or license missing")

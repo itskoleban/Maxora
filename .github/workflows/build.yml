@@ -55,8 +55,8 @@ jobs:
         run: |
           cmake --install build --config Release --prefix stage
           python scripts/package.py --stage stage --platform ${{ matrix.platform }} --out dist
-          python scripts/verify_package.py dist/omp-mmdb-0.1.0-${{ matrix.platform }}.zip --commit "$GITHUB_SHA"
-          python -m zipfile -e dist/omp-mmdb-0.1.0-${{ matrix.platform }}.zip packaged
+          python scripts/verify_package.py dist/omp-mmdb-2.0.0-${{ matrix.platform }}.zip --commit "$GITHUB_SHA"
+          python -m zipfile -e dist/omp-mmdb-2.0.0-${{ matrix.platform }}.zip packaged
       - name: Test the packaged component and compile its Pawn example in open.mp
         run: python scripts/openmp_integration.py --server-archive ${{ matrix.runtime }} --component ${{ matrix.binary }} --package-dir packaged --pawncc ${{ matrix.pawncc }} --duration 10 --evidence runtime-evidence.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

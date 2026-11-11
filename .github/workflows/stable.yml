@@ -3,11 +3,11 @@ on:
   workflow_dispatch:
     inputs:
       candidate_tag:
-        description: Verified v0.1.0-rc.N to promote without rebuilding
+        description: Verified v2.0.0-rc.N (N >= 1) to promote without rebuilding
         required: true
         type: string
       authorization:
-        description: Type publish verified v0.1.0 after reviewing all production evidence
+        description: Type publish verified v2.0.0 after reviewing all production evidence
         required: true
         type: string
 permissions:
@@ -32,8 +32,8 @@ jobs:
           RELEASE_AUTHORIZATION: ${{ inputs.authorization }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          test "$RELEASE_AUTHORIZATION" = 'publish verified v0.1.0'
-          [[ "$RC_TAG" =~ ^v0\.1\.0-rc\.[0-9]+$ ]]
+          test "$RELEASE_AUTHORIZATION" = 'publish verified v2.0.0'
+          [[ "$RC_TAG" =~ ^v2\.0\.0-rc\.[1-9][0-9]*$ ]]
           SHA=$(git rev-parse "refs/tags/$RC_TAG^{commit}")
           test "$(gh release view "$RC_TAG" --json isPrerelease --jq .isPrerelease)" = true
           gh api "repos/$GITHUB_REPOSITORY/actions/workflows/candidate.yml/runs?head_sha=$SHA&status=success" > candidate-runs.json
@@ -58,11 +58,14 @@ jobs:
           WINDOWS_SHA: ${{ needs.gate.outputs.windows_sha }}
           LINUX_SHA: ${{ needs.gate.outputs.linux_sha }}
         run: |
-          gh release download "$RC_TAG" --pattern 'omp-mmdb-0.1.0-*.zip*' --dir dist
-          python scripts/verify_package.py dist/omp-mmdb-0.1.0-windows-x86.zip --commit "$RELEASE_COMMIT" --sha "$WINDOWS_SHA"
-          python scripts/verify_package.py dist/omp-mmdb-0.1.0-linux-x86.zip --commit "$RELEASE_COMMIT" --sha "$LINUX_SHA"
+          gh release download "$RC_TAG" --pattern 'omp-mmdb-2.0.0-*.zip*' --dir dist
+          python scripts/verify_package.py dist/omp-mmdb-2.0.0-windows-x86.zip --commit "$RELEASE_COMMIT" --sha "$WINDOWS_SHA"
+          python scripts/verify_package.py dist/omp-mmdb-2.0.0-linux-x86.zip --commit "$RELEASE_COMMIT" --sha "$LINUX_SHA"
       - name: Promote validated candidate bytes
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_COMMIT: ${{ needs.gate.outputs.release_commit }}
-        run: gh release create v0.1.0 dist/* docs/validation/omp-mmdb-stable.json --target "$RELEASE_COMMIT" --title 'omp-mmdb 0.1.0' --notes-file docs/release-notes-v0.1.0.md
+        run: |
+          # A create-only request fails if the stable tag already exists.
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref=refs/tags/v2.0.0 -f sha="$RELEASE_COMMIT" --silent
+          gh release create v2.0.0 dist/omp-mmdb-2.0.0-{windows,linux}-x86.zip{,.sha256} docs/validation/omp-mmdb-stable.json --verify-tag --title 'omp-mmdb 2.0.0' --notes-file docs/release-notes-omp-mmdb-v2.0.0.md

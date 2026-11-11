@@ -12,11 +12,13 @@ public:
 	MMDBComponent() : bridge_(service_) {}
 	~MMDBComponent() override { disconnect(); }
 	StringView componentName() const override { return "MMDB"; }
-	SemanticVersion componentVersion() const override { return {0, 1, 0, 0}; }
+	SemanticVersion componentVersion() const override {
+		return {OMP_MMDB_VERSION_MAJOR, OMP_MMDB_VERSION_MINOR, OMP_MMDB_VERSION_PATCH, 0};
+	}
 
 	void onLoad(ICore* core) override {
 		core_ = core;
-		core_->printLn("MMDB 0.1.0: local MMDB component loaded");
+		core_->printLn("MMDB " OMP_MMDB_VERSION ": local MMDB component loaded");
 	}
 
 	void onInit(IComponentList* list) override {

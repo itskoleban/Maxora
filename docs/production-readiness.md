@@ -1,11 +1,15 @@
 # Production readiness
 
-The redesign requires fresh validation on the exact omp-mmdb release candidate. Historical Maxora artifacts and records under `docs/validation/` describe prior source and packages.
+For omp-mmdb 2.0.0, use candidate tags `v2.0.0-rc.N`, where `N` is a positive integer without leading zeros. The first candidate is `v2.0.0-rc.1`. A former Maxora candidate tag with the same name was deleted before this series started; the old candidate's source remains in Git history. Historical records under `docs/validation/` describe the earlier source and packages.
+
+Dispatch the [candidate workflow](../.github/workflows/candidate.yml) on the existing omp-mmdb candidate tag with `publish v2.0.0 candidate`. Candidate packages use version `2.0.0` in ZIP filenames and manifests. Stable publication under `v2.0.0` promotes the exact verified candidate ZIP and checksum files.
 
 Before stable publication:
 
 1. Review successful Windows x86 and Linux x86 builds, packaged open.mp integration, Pawn compilation and cleanup tests for the candidate commit.
 2. Review ASan, UBSan, TSan, parser and native fuzz results. Check repeated loads, failed replacements and concurrent reads of immutable snapshots.
 3. Validate legally obtained provider files, including representative large databases on x86. Record page-cache conditions, percentile latency, RSS and the effect of keeping two mappings during reload.
-4. Run a continuous 24-hour open.mp soak with the exact packaged candidate, record the logs and attach verified package hashes and workflow evidence.
-5. Obtain explicit stable publication authorization for the verified candidate. See the [candidate](../.github/workflows/candidate.yml), [soak](../.github/workflows/soak.yml) and [stable](../.github/workflows/stable.yml) workflows.
+4. Run the [continuous 24-hour open.mp soak](../.github/workflows/soak.yml) with the exact packaged candidate, record the logs and attach verified package hashes and workflow evidence.
+5. After reviewing the evidence for the exact candidate tag and commit, dispatch the [stable workflow](../.github/workflows/stable.yml) with that tag and `publish verified v2.0.0`.
+
+If stable publication fails after creating `v2.0.0`, check the tag's commit and the release state before completing publication manually with the reviewed assets and evidence. A workflow retry stops when the stable tag already exists.

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-omp-mmdb is a C++20 component for open.mp. Pawn scripts use local database names and numeric IP addresses to read fields from files supported by libmaxminddb. Paths select fields by schema, so the same API works with geographic, ASN and other MMDB datasets.
+omp-mmdb 2.0.0 is a C++20 component for scalable open.mp servers and the incompatible successor to Maxora. Its redesigned Pawn API uses script-local database names and numeric IP addresses to read fields from files supported by libmaxminddb, with no public database or result handles. Paths select fields by schema, so the same API works with geographic, ASN and other MMDB datasets. [Release notes](docs/release-notes-omp-mmdb-v2.0.0.md)
 
 ## Installation
 

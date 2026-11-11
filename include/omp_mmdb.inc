@@ -2,7 +2,7 @@
 	#endinput
 #endif
 #define _omp_mmdb_included
-#define MMDB_VERSION "0.1.0"
+#define MMDB_VERSION "2.0.0"
 
 enum MMDBStatus {
 	MMDB_OK = 0,
