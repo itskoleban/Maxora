@@ -4,4 +4,4 @@ omp-mmdb 2.0.0 is the incompatible successor to Maxora 1.x and the Maxora 2.0 ca
 
 The Windows x86 package contains `MMDB.dll`. The Linux x86 package contains `MMDB.so`. Both provide `include/omp_mmdb.inc`. Recompile affected scripts with `<omp_mmdb>` and follow the [migration guide](migration.md) for source and deployment changes.
 
-omp-mmdb candidates use `v2.0.0-omp-mmdb.rc.N` tags. The historical Maxora candidate retains `v2.0.0-rc.1`. Stable publication under `v2.0.0` uses the verified candidate packages after all [production qualification gates](production-readiness.md) pass.
+omp-mmdb continues the release-candidate series with `v2.0.0-rc.2`, then `v2.0.0-rc.3` if needed. The historical Maxora candidate retains its original `v2.0.0-rc.1` tag. Stable publication under `v2.0.0` uses the verified candidate packages after all [production qualification gates](production-readiness.md) pass.
