@@ -2,6 +2,11 @@ name: Performance and short stress
 on:
   workflow_call:
   workflow_dispatch:
+    inputs:
+      dbip_first_touch:
+        description: Run the optional DB-IP first-touch experiment on Linux x86
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -52,3 +57,74 @@ jobs:
             stress.jsonl
             benchmark-environment.txt
             benchmark-comparison/
+  dbip-first-touch:
+    if: github.event_name == 'workflow_dispatch' && inputs.dbip_first_touch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Build the Linux x86 Release benchmark
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib g++-multilib
+          cmake -S . -B build -G Ninja -DMMDB_BUILD_COMPONENT=OFF -DMMDB_BUILD_TESTS=OFF \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-m32 -DCMAKE_CXX_FLAGS=-m32
+          cmake --build build --target omp_mmdb_benchmark --parallel 2
+      - name: Verify the official DB-IP City Lite file and record cache behavior
+        run: |
+          mkdir evidence
+          curl --fail --location --max-time 120 --retry 2 \
+            https://download.db-ip.com/free/dbip-city-lite-2026-11.mmdb.gz -o dbip.mmdb.gz
+          gzip -dc dbip.mmdb.gz > dbip.mmdb
+          echo '5f64491f77c2c78b56cd83a88db4ea6c4666874322da38805498bbb754ccc735  dbip.mmdb' | sha256sum --check
+          sync --data dbip.mmdb
+          printf '%s\n' 108.163.106.46 175.77.92.71 135.3.20.128 133.123.180.13 \
+            178.224.238.217 42.110.123.149 168.22.99.133 2.84.81.192 38.63.130.128 \
+            49.242.201.237 157.72.80.97 71.233.120.174 189.244.80.20 120.19.183.251 \
+            78.86.42.183 138.104.132.102 > evidence/addresses.txt
+          {
+            uname -a
+            lscpu
+            git rev-parse HEAD
+            sha256sum dbip.mmdb build/omp_mmdb_benchmark
+          } > evidence/environment.txt
+          common=(--workload external_field --database dbip.mmdb --ips evidence/addresses.txt --path /country/iso_code --iterations 1)
+          for index in {0..15}; do
+            build/omp_mmdb_benchmark "${common[@]}" --start-index "$index" --warmup 0 \
+              --drop-cache-hint >> evidence/first-touch.jsonl
+            build/omp_mmdb_benchmark "${common[@]}" --start-index "$index" --warmup 1024 \
+              >> evidence/warm.jsonl
+          done
+          python - <<'PY' | tee evidence/summary.md "$GITHUB_STEP_SUMMARY"
+          import json
+          import pathlib
+          import statistics
+          for mode in ("first-touch", "warm"):
+              records = [json.loads(line) for line in pathlib.Path(f"evidence/{mode}.jsonl").read_text().splitlines()]
+              files = [r for r in records if r["kind"] == "external_database"]
+              environments = [r for r in records if r["kind"] == "environment"]
+              latencies = [r["mean_ns"] for r in records if r["kind"] == "workload"]
+              summaries = [r for r in records if r["kind"] == "summary"]
+              major = [r["process_major_page_faults"] for r in summaries]
+              minor = [r["process_page_faults"] - r["process_major_page_faults"] for r in summaries]
+              assert len(files) == len(environments) == len(latencies) == len(summaries) == 16
+              assert all(r["pointer_bits"] == 32 for r in environments)
+              assert all(r["drop_cache_hint"] == (mode == "first-touch") for r in files)
+              assert all(r["operations"] == 1 for r in summaries)
+              print(f"- {mode} (n=16): median {statistics.median(latencies)/1000:.2f} µs, range "
+                    f"{min(latencies)/1000:.2f}–{max(latencies)/1000:.2f} µs; "
+                    f"{sum(major)} major and {sum(minor)} minor process page faults "
+                    f"({sum(faults > 0 for faults in major)}/16 samples with a major fault)")
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: dbip-first-touch-evidence
+          path: evidence/
+          if-no-files-found: warn

@@ -69,8 +69,24 @@ In 16 separate DB-IP processes, each with zero warm-up and one lookup after
 mapping open, query latency ranged from 14.4 to 48.2 µs, with a median of
 27.55 µs. The process page-fault counter increased by 11 to 21. Windows
 combines soft and hard faults in that counter, and the system page cache was
-uncontrolled. This verifies fresh-process first-touch latency. Qualification
-on cold storage and measurements correlated with major faults remain open.
+uncontrolled. This verifies fresh-process first-touch latency on Windows.
+
+For Linux x86, run the [Performance and short stress workflow](../.github/workflows/performance.yml)
+with the `dbip_first_touch` input enabled. It downloads and verifies the same
+DB-IP edition, flushes the file's writes and uses `POSIX_FADV_DONTNEED` on that
+file before each first-touch process. It then pairs each first-touch lookup
+with a warm lookup of the same address. The `dbip-first-touch-evidence`
+artifact contains all 16 pairs, process major and minor fault counts, the
+environment and the dataset hash. The cache hint is advisory. The major
+fault counter describes the Linux process during the measurement window.
+
+The Linux x86 run measured a first-touch median of 824.07 µs (370.50 to
+2,679.28 µs). All 16 samples incurred a major fault, with 87 major faults in
+total. The warm median was 0.98 µs (0.84 to 1.68 µs), with zero major faults.
+This run measures one hosted Linux environment and one address set. The
+benchmark times the C++ lookup and field traversal, and the process fault
+counters cover the surrounding measurement window. [Raw measurements and
+environment](validation/omp-mmdb-linux-x86/) · [GitHub Actions run](https://github.com/itskoleban/omp-mmdb/actions/runs/42972338651).
 
 IP Geolocation by [DB-IP](https://db-ip.com), City Lite November 2026,
 CC BY 4.0. The uncompressed file's SHA-256 was
