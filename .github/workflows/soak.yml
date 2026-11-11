@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       candidate_tag:
-        description: Published v2.0.0-rc.N (N >= 2) tag (requires a trusted Linux x86-capable runner)
+        description: Published v2.0.0-rc.N (N >= 1) tag (requires a trusted Linux x86-capable runner)
         required: true
         type: string
 permissions:
@@ -22,7 +22,7 @@ jobs:
           RC_TAG: ${{ inputs.candidate_tag }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          [[ "$RC_TAG" =~ ^v2\.0\.0-rc\.([2-9]|[1-9][0-9]+)$ ]]
+          [[ "$RC_TAG" =~ ^v2\.0\.0-rc\.[1-9][0-9]*$ ]]
           git fetch origin "refs/tags/$RC_TAG:refs/tags/$RC_TAG"
           SHA=$(git rev-parse "refs/tags/$RC_TAG^{commit}")
           git checkout --detach "$SHA"
