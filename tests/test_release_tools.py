@@ -21,20 +21,20 @@ class ReleaseGateTests(unittest.TestCase):
 		self.commit = "a" * 40
 		names = ("windows_x86_build", "linux_x86_build", "windows_x86_runtime", "linux_x86_runtime", "unit_native_tests", "asan_ubsan", "tsan", "fuzz", "stress", "benchmark_review", "documentation_examples", "package_verification", "release_candidate_artifacts", "security_review")
 		self.report = {"source_commit": self.commit, "gates": {name: {"status": "passed", "evidence": "https://example.test/run", "source_commit": self.commit} for name in names}, "soak": {"status": "passed", "source_commit": self.commit, "duration_seconds": 86400, "environment": "test-host", "workload": "documented", "evidence": "https://example.test/soak"}, "unresolved_critical_high": 0, "reviewer": "maintainer", "reviewed_at": "2026-11-02T00:00:00Z"}
-		self.report["candidate_tag"] = "v2.0.0-rc.2"
+		self.report["candidate_tag"] = "v2.0.0-rc.1"
 		self.report["package_sha256"] = {"windows-x86": "a" * 64, "linux-x86": "b" * 64}
 
 	def test_complete_reviewed_report(self):
 		self.assertEqual(GATE.check(self.report, self.commit), [])
 
-	def test_candidate_tag_continues_after_historical_maxora_rc1(self):
-		for tag in ("v2.0.0-rc.1", "v0.1.0-rc.1", "v2.0.0", "v2.0.0-rc.0", "v2.0.0-rc.01", "v2.0.0-omp-mmdb.rc.1"):
+	def test_candidate_tag_rejects_invalid_or_old_naming(self):
+		for tag in ("v0.1.0-rc.1", "v2.0.0", "v2.0.0-rc.0", "v2.0.0-rc.01", "v2.0.0-omp-mmdb.rc.1"):
 			with self.subTest(tag=tag):
 				self.report["candidate_tag"] = tag
 				self.assertTrue(GATE.check(self.report, self.commit))
 
-	def test_candidate_tag_accepts_continuous_series_from_rc2(self):
-		for tag in ("v2.0.0-rc.2", "v2.0.0-rc.3", "v2.0.0-rc.9", "v2.0.0-rc.10", "v2.0.0-rc.100"):
+	def test_candidate_tag_accepts_continuous_series_from_rc1(self):
+		for tag in ("v2.0.0-rc.1", "v2.0.0-rc.2", "v2.0.0-rc.3", "v2.0.0-rc.9", "v2.0.0-rc.10", "v2.0.0-rc.100"):
 			with self.subTest(tag=tag):
 				self.report["candidate_tag"] = tag
 				self.assertEqual(GATE.check(self.report, self.commit), [])
