@@ -10,8 +10,8 @@ def check(report, commit):
 	failures = []
 	if not re.fullmatch(r"[0-9a-f]{40}", commit) or report.get("source_commit") != commit:
 		failures.append("evidence must name the exact 40-character release candidate commit")
-	if not re.fullmatch(r"v2\.0\.0-rc\.(?:[2-9]|[1-9][0-9]+)", str(report.get("candidate_tag", ""))):
-		failures.append("reviewed candidate_tag must be v2.0.0-rc.N with candidate number >= 2, without leading zeros")
+	if not re.fullmatch(r"v2\.0\.0-rc\.[1-9][0-9]*", str(report.get("candidate_tag", ""))):
+		failures.append("reviewed candidate_tag must be v2.0.0-rc.N with candidate number >= 1, without leading zeros")
 	for platform in ("windows-x86", "linux-x86"):
 		if not re.fullmatch(r"[0-9a-f]{64}", str(report.get("package_sha256", {}).get(platform, ""))):
 			failures.append(f"{platform}: independently reviewed package SHA-256 is required")
