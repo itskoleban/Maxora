@@ -13,6 +13,10 @@ Include `<omp_mmdb>`. All natives return `MMDBStatus:`. The [public include](../
 
 Names contain 1–63 ASCII letters, digits, underscores, hyphens or dots. Names are case-sensitive. File paths are unpacked UTF-8 strings of 1–4,095 bytes, relative to the server working directory or absolute. Use server-controlled filenames. Each script can open up to 64 databases at a time, with a component-wide limit of 4,095 active databases. Releasing an entry makes capacity available again.
 
+Each database belongs to the Pawn script that loads it. MMDB releases the script's databases automatically when the script unloads. Call `mmdb_unload()` while MMDB is operational when the script needs to release a database before unloading.
+
+In the pinned open.mp v1.6.7.3218 runtime, ordinary script exit callbacks run before the script's databases are released. Full server shutdown can tear down MMDB before Pawn runs `OnGameModeExit` or `OnFilterScriptExit`. MMDB native availability during those callbacks is unspecified during full shutdown. Rely on automatic cleanup for databases still open at shutdown. [Script unload and server shutdown](architecture.md#script-unload-and-server-shutdown)
+
 ## Queries
 
 | Native | Parameters | Result on success |

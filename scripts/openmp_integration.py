@@ -20,6 +20,11 @@ import threading
 import time
 import zipfile
 
+from download_runtime import RUNTIMES, VERSION
+
+# This observation belongs to the verified archive of this release.
+SHUTDOWN_PROBE_VERSION = "v1.6.7.3218"
+
 
 def rss_bytes(process):
 	"""Best-effort resident memory sample; excludes file cache outside this process."""
@@ -75,9 +80,12 @@ def main():
 	args.evidence = args.evidence.resolve()
 	args.evidence.parent.mkdir(parents=True, exist_ok=True)
 	log_path = args.evidence.with_suffix(".log")
+	probe_shutdown = bool(args.server_archive) and VERSION == SHUTDOWN_PROBE_VERSION
+	exit_callbacks = {"ordinary": [], "shutdown": []}
 	result = {"status": "failed", "component_sha256": sha256(args.component),
 			  "requested_workload_seconds": args.duration,
-			  "runtime": "open.mp v1.6.7.3218" if args.server_archive else "locally supplied open.mp", "platform": os.name,
+			  "runtime": f"open.mp {VERSION}" if args.server_archive else "locally supplied open.mp", "platform": os.name,
+			  "exit_callbacks": exit_callbacks, "shutdown_probe_enabled": probe_shutdown,
 			  "log": log_path.name, "workload": "Every 100 ms: 100 direct integer queries, missing field, IPv6 prefix, missing IPv4 record. Every 10 ticks: reload, failed reload, unload and reuse a name.",
 			  "memory_measurement": "resident process memory sampled once per second; not an allocation count"}
 	proc = None
@@ -89,10 +97,9 @@ def main():
 			if args.server_archive:
 				archive = args.server_archive.resolve()
 				result["runtime_archive_sha256"] = sha256(archive)
-				expected = ("db44b6cedc78e79fa4c7470ec81186ad9e880ad34529ae78fddfea70ec603223" if os.name == "nt"
-							else "0f7bfe70bb68ea780fe24a910b69412046e53d10feb65a9d4a9de8ff1f7f1329")
+				_, expected = RUNTIMES["windows-x86" if os.name == "nt" else "linux-x86"]
 				if result["runtime_archive_sha256"] != expected:
-					raise RuntimeError("runtime archive differs from pinned official v1.6.7.3218 asset")
+					raise RuntimeError(f"runtime archive differs from pinned official {VERSION} asset")
 				if zipfile.is_zipfile(archive):
 					with zipfile.ZipFile(archive) as z:
 						for member in z.infolist():
@@ -139,13 +146,14 @@ def main():
 				provider_flags.append(define + "=1")
 				provider_markers.append(marker)
 			result["provider_files"] = provider_files
+			test_flags = ["MMDB_TEST_PINNED_SHUTDOWN=1"] if probe_shutdown else []
 			for source, target in ((root / "tests/pawn/integration.pwn", runtime / "gamemodes/mmdb_test.amx"),
 								   (root / "tests/pawn/side.pwn", runtime / "filterscripts/mmdb_side.amx"),
 								   (package_root / "examples/geolocation.pwn", temporary / "geolocation.amx")):
 				compiled = subprocess.run([str(compiler), str(source), "-i" + str(package_root / "include"),
 										   "-i" + str(runtime / "qawno/include"), "-t4", "-o" + str(target), "-d3", "-E+",
 										   "MMDB_TEST_DURATION_MS=" + str(int(args.duration * 1000)),
-										   *provider_flags], cwd=runtime,
+										   *provider_flags, *test_flags], cwd=runtime,
 										  capture_output=True, text=True, creationflags=0x08000000 if os.name == "nt" else 0)
 				if compiled.returncode:
 					raise RuntimeError("Pawn compile failed: " + compiled.stdout + compiled.stderr)
@@ -189,7 +197,8 @@ def main():
 						lines.put(line)
 				except OSError:
 					pass  # Linux PTY master reports EIO after the slave exits.
-			threading.Thread(target=reader, daemon=True).start()
+			log_reader = threading.Thread(target=reader, daemon=True)
+			log_reader.start()
 			counts = {"MMDB_MAIN_PASS": 0, "MMDB_AFTER_RESET_PASS": 0,
 					  "MMDB_SIDE_PASS": 0, "MMDB_SIDE_EXIT": 0, "MMDB_SOAK_TICK": 0,
 					  "MMDB_SIDE_CLEANUP_PASS": 0, "MMDB_MAIN_CLEANUP_PASS": 0,
@@ -204,8 +213,16 @@ def main():
 							return
 						log.write(line.replace(str(runtime), "<runtime>"))
 						log.flush()
-						if "MMDB_FAIL" in line:
+						if any(marker in line for marker in ("MMDB_FAIL", "ERROR: AddressSanitizer",
+															 "ERROR: LeakSanitizer", "runtime error:")):
 							raise RuntimeError(line.strip())
+						_, marker, payload = line.partition("MMDB_EXIT ")
+						if marker:
+							script, presence_status, loaded, version_status, version = payload.split()
+							phase = "shutdown" if counts["MMDB_WORKLOAD_FINISHED"] else "ordinary"
+							exit_callbacks[phase].append(
+								{"script": script, "presence_status": int(presence_status), "loaded": int(loaded),
+								 "version_status": int(version_status), "ip_version": int(version)})
 						for marker in counts:
 							if marker in line:
 								counts[marker] += 1
@@ -246,11 +263,27 @@ def main():
 				if ticks < max(1, int(args.duration / 2)):
 					raise RuntimeError("insufficient completed Pawn workload markers")
 				proc.wait(timeout=20)
+				log_reader.join(timeout=5)
+				if log_reader.is_alive():
+					raise RuntimeError("server log did not close after exit")
 				drain()
 				if counts["MMDB_WORKLOAD_FINISHED"] != 1:
 					raise RuntimeError("Pawn workload did not finish normally")
 				if proc.returncode != 0:
 					raise RuntimeError("unclean server exit: " + str(proc.returncode))
+				filter_exit = {"script": "filterscript", "presence_status": 0, "loaded": 1,
+							   "version_status": 0, "ip_version": 4}
+				gamemode_exit = dict(filter_exit, script="gamemode", ip_version=6)
+				if exit_callbacks["ordinary"] != [filter_exit, filter_exit, gamemode_exit]:
+					raise RuntimeError("unexpected MMDB status during reloadfs, unloadfs or GMX")
+				# On the pinned runtime both native calls return MMDB_INVALID_ARGUMENT
+				# (1) and leave the Pawn output cells at their initial values.
+				expected_shutdown = [
+					{"script": script, "presence_status": 1, "loaded": 0, "version_status": 1, "ip_version": -1}
+					for script in ("filterscript", "gamemode")
+				] if probe_shutdown else []
+				if sorted(exit_callbacks["shutdown"], key=lambda event: event["script"]) != expected_shutdown:
+					raise RuntimeError("unexpected MMDB shutdown observations")
 				result.update(status="passed", workload_seconds=elapsed, markers=counts,
 							  minimum_completed_direct_queries=max(0, ticks - 1) * 1000,
 							  resident_memory_samples=len(samples),

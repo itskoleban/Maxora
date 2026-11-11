@@ -29,14 +29,3 @@ public OnPlayerConnect(playerid) {
 
 	return 1;
 }
-
-public OnGameModeExit() {
-	new MMDBStatus:asn = mmdb_unload("asn");
-	new MMDBStatus:city = mmdb_unload("city");
-
-	if (city != MMDB_OK || asn != MMDB_OK) {
-		printf("[MMDB] Unload status: city=%d asn=%d", _:city, _:asn);
-	}
-
-	return 1;
-}

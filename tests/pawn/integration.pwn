@@ -9,6 +9,11 @@ native SendRconCommand(const command[]);
 native SetSVarInt(const name[], value);
 native GetSVarInt(const name[]);
 native strcmp(const first[], const second[], bool:ignorecase, length);
+#if !defined MMDB_TEST_PINNED_SHUTDOWN
+native CallRemoteFunction(const function[], const format[], {Float,_}:...);
+#endif
+
+#include "exit_probe.inc"
 
 #if !defined MMDB_TEST_DURATION_MS
 	#define MMDB_TEST_DURATION_MS 10000
@@ -147,12 +152,17 @@ public MMDBTestTick()
 
 public OnGameModeExit()
 {
-	// Leave all three databases open to exercise automatic owner cleanup.
+	// Leave the databases open to exercise automatic owner cleanup.
+	MMDBTestLogExit("gamemode");
 	return 1;
 }
 
 public MMDBTestFinish()
 {
+#if !defined MMDB_TEST_PINNED_SHUTDOWN
+	gMMDBTestShuttingDown = true;
+	Check(CallRemoteFunction("MMDBTestPrepareShutdown", "") == 1, "prepare local runtime shutdown");
+#endif
 	print("MMDB_WORKLOAD_FINISHED");
 	SendRconCommand("exit");
 	return 1;

@@ -1,11 +1,22 @@
 #include <omp_mmdb>
 
 native print(const string[]);
+native printf(const format[], {Float,_}:...);
 native SetSVarInt(const name[], value);
 native GetSVarInt(const name[]);
 
+#include "exit_probe.inc"
+
 forward OnFilterScriptInit();
 forward OnFilterScriptExit();
+
+#if !defined MMDB_TEST_PINNED_SHUTDOWN
+forward MMDBTestPrepareShutdown();
+public MMDBTestPrepareShutdown() {
+	gMMDBTestShuttingDown = true;
+	return 1;
+}
+#endif
 
 main() {}
 
@@ -29,6 +40,7 @@ public OnFilterScriptInit()
 
 public OnFilterScriptExit()
 {
+	MMDBTestLogExit("filterscript");
 	print("MMDB_SIDE_EXIT");
 	return 1;
 }

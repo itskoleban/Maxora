@@ -44,22 +44,13 @@ public OnPlayerConnect(playerid) {
 
 	return 1;
 }
-
-public OnGameModeExit() {
-	new MMDBStatus:asn = mmdb_unload("asn");
-	new MMDBStatus:city = mmdb_unload("city");
-
-	if (city != MMDB_OK || asn != MMDB_OK) {
-		printf("[MMDB] Unload status: city=%d asn=%d", _:city, _:asn);
-	}
-
-	return 1;
-}
 ~~~
 
 ## Database Management
 
-Use `mmdb_load(name, file)` to register a name and `mmdb_reload(name, file)` to replace its mapping. Failed reloads preserve the previous database. `mmdb_is_loaded` reports whether a name is present, and `mmdb_unload` releases it early. Names are case-sensitive and private to the calling script. Gamemode and filterscript unload release that script's databases.
+Use `mmdb_load(name, file)` to register a name and `mmdb_reload(name, file)` to replace its mapping. Failed reloads preserve the previous database. `mmdb_is_loaded` reports whether a name is present. Each Pawn script owns its databases and their case-sensitive names. Unloading a gamemode or filterscript automatically releases its databases. Use `mmdb_unload(name)` to release a database early while the component is operational.
+
+During full server shutdown, MMDB native availability in `OnGameModeExit` and `OnFilterScriptExit` is unspecified. In open.mp v1.6.7.3218, component teardown makes the natives unavailable before Pawn runs those callbacks. Rely on automatic cleanup during shutdown. [Script unload and server shutdown](docs/architecture.md#script-unload-and-server-shutdown)
 
 ## Querying Data
 
