@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       candidate_tag:
-        description: Verified v2.0.0-omp-mmdb.rc.N to promote without rebuilding
+        description: Verified v2.0.0-rc.N (N >= 2) to promote without rebuilding
         required: true
         type: string
       authorization:
@@ -33,7 +33,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           test "$RELEASE_AUTHORIZATION" = 'publish verified v2.0.0'
-          [[ "$RC_TAG" =~ ^v2\.0\.0-omp-mmdb\.rc\.[1-9][0-9]*$ ]]
+          [[ "$RC_TAG" =~ ^v2\.0\.0-rc\.([2-9]|[1-9][0-9]+)$ ]]
           SHA=$(git rev-parse "refs/tags/$RC_TAG^{commit}")
           test "$(gh release view "$RC_TAG" --json isPrerelease --jq .isPrerelease)" = true
           gh api "repos/$GITHUB_REPOSITORY/actions/workflows/candidate.yml/runs?head_sha=$SHA&status=success" > candidate-runs.json
