@@ -1,0 +1,2 @@
+- first-touch (n=16): median 824.07 µs, range 370.50–2679.28 µs; 87 major and 40 minor process page faults (16/16 samples with a major fault)
+- warm (n=16): median 0.98 µs, range 0.84–1.68 µs; 0 major and 20 minor process page faults (0/16 samples with a major fault)
