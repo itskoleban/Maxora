@@ -111,7 +111,7 @@ For more specialized schemas, see MaxMind's official [database documentation ind
 
 ## Pawn examples
 
-Load the appropriate files in the script before calling these natives (see the [Quick Start](../README.md#quick-start)).
+Load the appropriate files in the script before calling these natives (see the [Quick Start](../README.md#quick-start)). The examples below assume `ip` contains an IPv4 or IPv6 address already obtained by the script.
 
 ~~~pawn
 new country[128], required;
@@ -132,12 +132,11 @@ new bool:exists;
 if (mmdb_has_field("city", ip, "/city/names/en", exists) == MMDB_OK && exists) {
 	new city[128], required;
 	if (mmdb_get_string("city", ip, "/city/names/en", city, sizeof(city), required) == MMDB_OK) {
-    	printf("[MMDB] City: %s", city);
-    }
+		printf("[MMDB] City: %s", city);
+	}
 }
 ~~~
 
-Use **tabs** rather than spaces for indentation when incorporating these snippets into project Pawn source files.
 
 ## Inspecting a different MMDB schema
 
