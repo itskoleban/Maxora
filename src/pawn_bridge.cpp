@@ -18,6 +18,10 @@ public:
 		if (!data && amx_->base) {
 			const auto* header = reinterpret_cast<const AMX_HEADER*>(amx_->base);
 			if (header->dat < 0) return false;
+			// Inline images reserve the last cell as a stack sentinel.
+			const auto ceiling = static_cast<std::int64_t>(header->stp) -
+				static_cast<std::int64_t>(header->dat) - static_cast<std::int64_t>(sizeof(cell));
+			if (amx_->stp < 0 || amx_->stp > ceiling) return false;
 			data = amx_->base + header->dat;
 		}
 		if (!data) return false;

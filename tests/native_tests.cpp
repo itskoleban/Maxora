@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <iostream>
 #include <limits>
+#include <new>
 #include <set>
 #include <stdexcept>
 
@@ -49,6 +50,109 @@ struct Vm {
 		return static_cast<Status>(native(function).func(&amx, params));
 	}
 };
+
+struct InlineVm {
+	static constexpr cell cell_size = static_cast<cell>(sizeof(cell));
+	static constexpr cell data_offset = static_cast<cell>(sizeof(AMX_HEADER));
+	static constexpr std::size_t cell_count = 16;
+	static constexpr cell ceiling = static_cast<cell>(cell_count - 1) * cell_size;
+	static_assert(data_offset % alignof(cell) == 0);
+
+	alignas(AMX_HEADER) alignas(cell) unsigned char storage[data_offset + cell_count * sizeof(cell)]{};
+	AMX_HEADER* header = ::new (static_cast<void*>(storage)) AMX_HEADER{};
+	cell* data = ::new (static_cast<void*>(storage + data_offset)) cell[cell_count]{};
+	AMX amx{};
+
+	InlineVm() {
+		header->magic = AMX_MAGIC;
+		header->dat = data_offset;
+		header->hea = data_offset + 4 * cell_size;
+		header->size = header->hea;
+		header->stp = data_offset + ceiling + cell_size;
+		amx.base = storage;
+		amx.hlw = amx.hea = header->hea - data_offset;
+		amx.stk = ceiling - 3 * cell_size;
+		amx.stp = ceiling;
+	}
+
+	cell& at(cell offset) { return data[static_cast<std::size_t>(offset) / sizeof(cell)]; }
+};
+
+void check_inline_stack_ceiling(PawnBridge& bridge) {
+	InlineVm vm;
+	CHECK(bridge.attach(&vm.amx) == Status::Ok);
+	const auto is_loaded = native("mmdb_is_loaded").func;
+	constexpr cell width = InlineVm::cell_size;
+	constexpr cell output = 3 * width;
+	const auto stack = vm.amx.stk;
+	const std::array<cell, 3> args{2 * width, 0, output};
+	auto* params = &vm.at(stack);
+	std::copy(args.begin(), args.end(), params);
+	vm.at(0) = 'd';
+	vm.at(width) = 'b';
+	const auto call = [&](const cell* block) {
+		return static_cast<Status>(is_loaded(&vm.amx, block));
+	};
+	const auto rejects_without_output = [&](const cell* block) {
+		vm.at(output) = -1;
+		return call(block) == Status::InvalidArgument && vm.at(output) == -1;
+	};
+
+	vm.at(output) = -1;
+	CHECK(call(params) == Status::Ok && vm.at(output) == 0);
+	CHECK(rejects_without_output(params + 1));
+	// Only the register changes. The parameters and output stay in live cells.
+	vm.amx.stp += width;
+	CHECK(rejects_without_output(params));
+	vm.amx.stp = std::numeric_limits<cell>::max();
+	CHECK(rejects_without_output(params));
+	vm.amx.stp = std::numeric_limits<cell>::min();
+	CHECK(rejects_without_output(params));
+	vm.amx.stp = InlineVm::ceiling;
+
+	const auto image_top = vm.header->stp;
+	vm.header->stp = vm.header->dat;
+	CHECK(rejects_without_output(params));
+	vm.header->stp = std::numeric_limits<cell>::min();
+	CHECK(rejects_without_output(params));
+	vm.header->stp = image_top;
+	vm.header->dat = std::numeric_limits<cell>::min();
+	CHECK(rejects_without_output(params));
+	vm.header->dat = InlineVm::data_offset;
+
+	vm.amx.hea += 2 * width;
+	vm.amx.stk -= 2 * width;
+	params = &vm.at(vm.amx.stk);
+	std::copy(args.begin(), args.end(), params);
+	const cell grown_heap_output = 5 * width;
+	params[2] = grown_heap_output;
+	vm.at(grown_heap_output) = -1;
+	CHECK(call(params) == Status::Ok && vm.at(grown_heap_output) == 0);
+	vm.amx.hea -= 2 * width;
+	vm.at(grown_heap_output) = -1;
+	CHECK(call(params) == Status::InvalidArgument && vm.at(grown_heap_output) == -1);
+
+	vm.amx.stp -= width;
+	const auto stack_output = vm.amx.stp - width;
+	params[2] = stack_output;
+	vm.at(stack_output) = -1;
+	CHECK(call(params) == Status::Ok && vm.at(stack_output) == 0);
+	params[2] = output + 1;
+	CHECK(rejects_without_output(params));
+	params[2] = output;
+	vm.amx.stp = vm.amx.stk + 2 * width;
+	CHECK(rejects_without_output(params));
+
+	// Separate data does not use the header's inline bounds.
+	std::array<cell, InlineVm::cell_count> separate{};
+	std::copy_n(vm.data, separate.size(), separate.begin());
+	vm.amx.data = reinterpret_cast<unsigned char*>(separate.data());
+	vm.amx.stp = InlineVm::ceiling;
+	vm.header->stp = 0;
+	const auto* separate_params = separate.data() + vm.amx.stk / width;
+	CHECK(call(separate_params) == Status::Ok && separate[3] == 0 && vm.at(output) == -1);
+	bridge.detach(&vm.amx);
+}
 } // namespace
 
 int main() {
@@ -64,6 +168,7 @@ int main() {
 			CHECK(a.call(native_table()[i].name, {}) == Status::InvalidArgument);
 		}
 		CHECK(native_count() == 18);
+		check_inline_stack_ceiling(bridge);
 
 		const auto is_loaded = native("mmdb_is_loaded").func;
 		constexpr auto cell_size = static_cast<cell>(sizeof(cell));
