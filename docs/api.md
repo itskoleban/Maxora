@@ -49,7 +49,9 @@ Use numeric IPv4 or IPv6 without brackets, ports, CIDR suffixes or IPv6 zone ide
 
 ## Error handling
 
-Use unpacked Pawn strings. For every text output, `capacity` counts cells including the terminator and must be between 1 and 1,048,576. `required` must be a separate cell outside the destination. On success, `required` receives the length including the terminator. On `MMDB_BUFFER_TOO_SMALL`, only `required` changes. Other failures leave output arguments unchanged. The component checks spans against live AMX memory. Pass the actual size of the Pawn array because the VM does not expose the length of each allocation to the native.
+Use unpacked Pawn strings. For every text output, `capacity` counts cells including the terminator and must be between 1 and 1,048,576. `required` must be a separate cell outside the destination. On success, `required` receives the length including the terminator. On `MMDB_BUFFER_TOO_SMALL`, only `required` changes. Other failures leave output arguments unchanged.
+
+AMX memory bounds describe the logical data and heap region and the active stack. Pawn array capacity is the number of cells reserved for a specific array or buffer. A span can fit within a logical AMX region and still extend beyond the array. The bridge has no per-array size information, so pass the actual destination capacity in cells and provide enough space for the result to fit. Every output argument must refer to valid writable Pawn memory.
 
 `mmdb_is_loaded` writes false for an absent name. `mmdb_has_record` writes false when a loaded database has no matching network. `mmdb_has_field` writes false when an existing record lacks the field and returns `MMDB_NO_RECORD` for an unmatched IP. Invalid input and database errors are reported as statuses.
 
