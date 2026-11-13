@@ -4,7 +4,11 @@
 
 `Service` is confined to the server thread. It maps a live AMX address to that script's namespace and keeps immutable, RAII-managed database mappings. Pointer reuse is safe because unload erases the namespace before the next attachment. No script identifier is issued or incremented. The registry grows with active scripts and databases.
 
-A native call validates the AMX parameter block and reads bounded inputs. It resolves the current database, parses the IP, looks up a record and extracts the requested field. A call-local `Lookup` pins the immutable database until the native returns, including while a string view is copied back to Pawn. Its lifetime never crosses the native boundary. The same immutable snapshot can be read on multiple C++ threads if each reader owns a reference. Concurrent access to the Pawn VM or `Service` is outside the contract.
+The open.mp Pawn runtime owns the script's AMX storage. The bridge borrows it only for synchronous native calls on the server thread. The interpreter passes the parameter block at the saved `stk` offset from the AMX data origin. The bridge verifies that location before reading the block and checks spans against the logical data and heap region or the active stack. The interpreter can legitimately move `hea` and `stk` during execution. For the supported inline layout, the bridge also checks the live `stp` against the ceiling derived from the image header.
+
+The inline comparison uses AMX metadata. The storage owner remains responsible for physical extent, alignment and lifetime. This borrowing model provides no lifetime guarantee across reentrant script unload, and external hosts must supply valid pointers. [AMX validation and operating assumptions](security.md)
+
+A native call reads bounded inputs, resolves the current database, parses the IP, looks up a record and extracts the requested field. A call-local `Lookup` pins the immutable database until the native returns, including while a string view is copied back to Pawn. Its lifetime never crosses the native boundary. The same immutable snapshot can be read on multiple C++ threads if each reader owns a reference. Concurrent access to the Pawn VM or `Service` is outside the contract.
 
 Reload opens and validates the replacement before changing the map entry. A failed open or validation leaves the original entry intact. Releasing the last reference closes the mapping, and destroying the component drops every namespace. Lookup does not increment a counter or allocate a permanent resource.
 
